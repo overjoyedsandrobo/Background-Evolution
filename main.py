@@ -3,6 +3,7 @@ import os
 import time
 import threading
 import ctypes
+from ctypes import wintypes
 import pygame
 
 WINDOW_W, WINDOW_H = 320, 600
@@ -106,19 +107,75 @@ def main():
     screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
     clock = pygame.time.Clock()
 
-    # On Windows, disable the system menu to prevent clicks on the top-left icon
-    def disable_system_menu():
+    # Keep native window controls functional, but suppress the icon/system-menu popup.
+    def suppress_system_menu_popup():
         if sys.platform != 'win32':
             return
         try:
             hwnd = _get_hwnd()
             if not hwnd:
                 return
-            ctypes.windll.user32.SetSystemMenu(int(hwnd), False)
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+
+            GetSystemMenu = user32.GetSystemMenu
+            GetSystemMenu.argtypes = [wintypes.HWND, wintypes.BOOL]
+            GetSystemMenu.restype = wintypes.HMENU
+
+            # Reset system menu first so Close/Minimize/Maximize remain intact.
+            GetSystemMenu(int(hwnd), True)
+
+            if ctypes.sizeof(ctypes.c_void_p) == 8:
+                get_long_ptr = user32.GetWindowLongPtrW
+                set_long_ptr = user32.SetWindowLongPtrW
+            else:
+                get_long_ptr = user32.GetWindowLongW
+                set_long_ptr = user32.SetWindowLongW
+
+            get_long_ptr.argtypes = [wintypes.HWND, ctypes.c_int]
+            get_long_ptr.restype = ctypes.c_void_p
+            set_long_ptr.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+            set_long_ptr.restype = ctypes.c_void_p
+
+            CallWindowProc = user32.CallWindowProcW
+            CallWindowProc.argtypes = [ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+            CallWindowProc.restype = ctypes.c_ssize_t
+
+            GWL_WNDPROC = -4
+            WM_SYSCOMMAND = 0x0112
+            WM_NCLBUTTONDOWN = 0x00A1
+            WM_NCLBUTTONUP = 0x00A2
+            WM_NCLBUTTONDBLCLK = 0x00A3
+            WM_NCRBUTTONUP = 0x00A5
+            SC_MOUSEMENU = 0xF090
+            SC_KEYMENU = 0xF100
+            HTSYSMENU = 3
+
+            old_proc = get_long_ptr(int(hwnd), GWL_WNDPROC)
+            if not old_proc:
+                return
+
+            WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+
+            def _wndproc(h, msg, wparam, lparam):
+                # Ignore any non-client clicks on the title-bar icon (system menu hit target).
+                if msg in (WM_NCLBUTTONDOWN, WM_NCLBUTTONUP, WM_NCLBUTTONDBLCLK, WM_NCRBUTTONUP):
+                    if int(wparam) == HTSYSMENU:
+                        return 0
+                if msg == WM_SYSCOMMAND:
+                    cmd = int(wparam) & 0xFFF0
+                    if cmd == SC_MOUSEMENU or cmd == SC_KEYMENU:
+                        return 0
+                return CallWindowProc(old_proc, h, msg, wparam, lparam)
+
+            # Keep references alive for the lifetime of the app.
+            suppress_system_menu_popup._old_proc = old_proc
+            suppress_system_menu_popup._proc_ref = WNDPROC(_wndproc)
+
+            set_long_ptr(int(hwnd), GWL_WNDPROC, ctypes.cast(suppress_system_menu_popup._proc_ref, ctypes.c_void_p))
         except Exception:
             pass
 
-    disable_system_menu()
+    suppress_system_menu_popup()
 
     font = pygame.font.SysFont(None, 22)
     status_text = "Dormant"
