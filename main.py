@@ -134,12 +134,13 @@ def main():
         except Exception:
             pass
 
-    # attempt to load window icon from assets/icon.png (optional)
-    icon_path = os.path.join("assets", "icon.png")
+    egg_path = os.path.join("assets", "egg.png")
+    egg_image = None
     try:
-        if os.path.exists(icon_path):
-            icon_surf = pygame.image.load(icon_path)
+        if os.path.exists(egg_path):
+            icon_surf = pygame.image.load(egg_path)
             pygame.display.set_icon(icon_surf)
+            egg_image = pygame.image.load(egg_path)
     except Exception:
         pass
 
@@ -249,6 +250,7 @@ def main():
                 max_h = window_size[1]
                 max_x = 0
                 max_y = 0
+                NUDGE = 10
                 monitor = MonitorFromWindow(target_hwnd, MONITOR_DEFAULTTONEAREST)
                 if monitor:
                     monitor_info = MONITORINFO()
@@ -257,10 +259,8 @@ def main():
                         work_w = monitor_info.rcWork.right 
                         work_h = monitor_info.rcWork.bottom
                         max_w = int((work_h) * ASPECT_RATIO)
-                        max_h = work_h + 10
-                        RIGHT_EDGE_NUDGE = 10
-                        # Clamp to monitor bounds for safety.
-                        max_x = (work_w - max_w)+ RIGHT_EDGE_NUDGE
+                        max_h = work_h + NUDGE
+                        max_x = (work_w - max_w) + NUDGE
                 max_w = max(MIN_W, max_w)
                 max_h = max(MIN_H, max_h)
                 return max_w, max_h, max_x, max_y
@@ -407,8 +407,8 @@ def main():
         # load PIL image for tray (resize to typical tray size)
         img = None
         try:
-            if os.path.exists(icon_path) and PILImage_local is not None:
-                img = PILImage_local.open(icon_path).convert("RGBA")
+            if os.path.exists(egg_path) and PILImage_local is not None:
+                img = PILImage_local.open(egg_path).convert("RGBA")
                 # choose resampling constant in a version-safe way
                 resample = getattr(getattr(PILImage_local, 'Resampling', PILImage_local), 'LANCZOS', getattr(PILImage_local, 'LANCZOS', 1))
                 img = img.resize((64, 64), resample)
@@ -443,9 +443,9 @@ def main():
     egg_radius = 90
     egg_x = WINDOW_W // 2
     egg_y = 220
-    # egg geometry: use separate width/height to make an egg-like oval
-    egg_width = int(egg_radius * 2 * 0.82)  # slightly narrower
-    egg_height = int(egg_radius * 2 * 1.18)  # slightly taller
+    # egg geometry: use separate width/height to match the PNG
+    egg_width = int(egg_radius * 3)
+    egg_height = int(egg_radius * 3)
 
     shake = ShakeAnimation()
 
@@ -471,11 +471,9 @@ def main():
         # bias the egg slightly downward to feel more egg-like
         egg_rect_draw.center = (egg_center[0], egg_center[1] + egg_height // 12)
 
-        shadow_rect = egg_rect_draw.copy()
-        shadow_rect.move_ip(6, 12)
-        pygame.draw.ellipse(canvas, (10, 10, 10), shadow_rect)
-
-        pygame.draw.ellipse(canvas, (245, 240, 220), egg_rect_draw)
+        if egg_image is not None:
+            scaled_egg = pygame.transform.scale(egg_image, (egg_width, egg_height))
+            canvas.blit(scaled_egg, egg_rect_draw)
 
         screen.fill((18, 18, 18))
         if viewport.width == WINDOW_W and viewport.height == WINDOW_H:
