@@ -82,6 +82,19 @@ def main():
     win_hook_refs = {}
     is_interactive_resizing = False
     live_redraw = None
+    image_not_found_path = os.path.join("assets", "icons", "misc", "image_not_found.webp")
+
+    def load_image_with_fallback(primary_path):
+        for path in (primary_path, image_not_found_path):
+            try:
+                if os.path.exists(path):
+                    surf = pygame.image.load(path)
+                    if pygame.display.get_surface() is not None:
+                        return surf.convert_alpha()
+                    return surf
+            except Exception:
+                pass
+        return None
 
     # Windows helper functions to hide/show the native window (remove from taskbar)
     def _get_hwnd():
@@ -136,18 +149,20 @@ def main():
             pass
 
     # Use egg sprite as the app icon for both title bar and tray.
-    icon_path = os.path.join("assets", "egg.png")
-    if not os.path.exists(icon_path):
-        icon_path = os.path.join("assets", "icon.png")
+    egg_path = os.path.join("assets", "icons", "egg", "egg.png")
+    icon_path = egg_path
+    lock_path = os.path.join("assets", "icons", "misc", "lock.webp")
+    lock_image: Optional[pygame.Surface] = None
     try:
-        if os.path.exists(icon_path):
-            icon_surf = pygame.image.load(icon_path)
+        icon_surf = load_image_with_fallback(icon_path)
+        if icon_surf is not None:
             pygame.display.set_icon(icon_surf)
     except Exception:
         pass
 
     pygame.display.set_caption("Egg UI Demo")
     screen = pygame.display.set_mode((WINDOW_W, WINDOW_H), pygame.RESIZABLE)
+    lock_image = load_image_with_fallback(lock_path)
     canvas_w = WINDOW_W * RESOLUTION_SCALE
     canvas_h = WINDOW_H * RESOLUTION_SCALE
     canvas = pygame.Surface((canvas_w, canvas_h))
@@ -415,16 +430,18 @@ def main():
         # load PIL image for tray (resize to typical tray size)
         img = None
         try:
-            if os.path.exists(icon_path) and PILImage_local is not None:
-                img = PILImage_local.open(icon_path).convert("RGBA")
-                # choose resampling constant in a version-safe way
-                resample = getattr(getattr(PILImage_local, 'Resampling', PILImage_local), 'LANCZOS', getattr(PILImage_local, 'LANCZOS', 1))
-                img = img.resize((64, 64), resample)
+            if PILImage_local is not None:
+                tray_path = icon_path if os.path.exists(icon_path) else image_not_found_path
+                if os.path.exists(tray_path):
+                    img = PILImage_local.open(tray_path).convert("RGBA")
+                    # choose resampling constant in a version-safe way
+                    resample = getattr(getattr(PILImage_local, 'Resampling', PILImage_local), 'LANCZOS', getattr(PILImage_local, 'LANCZOS', 1))
+                    img = img.resize((64, 64), resample)
         except Exception:
             img = None
 
-        if img is None and PILImage_local is not None:
-            img = PILImage_local.new("RGBA", (64, 64), (200, 200, 200, 255))
+        if img is None:
+            return
 
         try:
             tray_icon = pystray.Icon(
@@ -458,12 +475,7 @@ def main():
     pygame.draw.ellipse(egg_sprite, (245, 240, 220), egg_sprite.get_rect())
     egg_mask: pygame.mask.Mask = pygame.mask.from_surface(egg_sprite)
 
-    egg_path = os.path.join("assets", "egg.png")
-    try:
-        if os.path.exists(egg_path):
-            egg_image = pygame.image.load(egg_path).convert_alpha()
-    except Exception:
-        egg_image = None
+    egg_image = load_image_with_fallback(egg_path)
 
     def get_canvas_scale():
         return canvas_h / WINDOW_H
@@ -493,15 +505,18 @@ def main():
 
         return stats_tab_rect, path_tab_rect, page_rect
 
-    def draw_lock_on_card(card_rect, color):
-        body_w = max(8, card_rect.width // 4)
-        body_h = max(8, card_rect.height // 5)
-        body = pygame.Rect(0, 0, body_w, body_h)
-        body.center = (card_rect.centerx, card_rect.centery + body_h // 4)
-        pygame.draw.rect(canvas, color, body, border_radius=max(2, body_w // 6))
-        arc_rect = pygame.Rect(0, 0, body_w, max(10, body_h))
-        arc_rect.center = (card_rect.centerx, body.top + 1)
-        pygame.draw.arc(canvas, color, arc_rect, 3.14159, 0, max(2, body_w // 10))
+    def draw_lock_on_card(card_rect):
+        if lock_image is None:
+            return
+        max_w = max(8, int(card_rect.width * 0.38))
+        max_h = max(8, int(card_rect.height * 0.38))
+        img_w, img_h = lock_image.get_size()
+        fit = min(max_w / img_w, max_h / img_h)
+        draw_w = max(1, int(img_w * fit))
+        draw_h = max(1, int(img_h * fit))
+        lock_scaled = pygame.transform.smoothscale(lock_image, (draw_w, draw_h))
+        lock_rect = lock_scaled.get_rect(center=(card_rect.centerx, card_rect.centery))
+        canvas.blit(lock_scaled, lock_rect)
 
     def rebuild_egg_sprite():
         nonlocal egg_sprite, egg_mask
@@ -510,9 +525,7 @@ def main():
         egg_box_h = max(1, int(egg_radius * 3))
 
         if egg_image is None:
-            fallback = pygame.Surface((egg_box_w, egg_box_h), pygame.SRCALPHA)
-            pygame.draw.ellipse(fallback, (245, 240, 220), fallback.get_rect())
-            egg_sprite = fallback
+            egg_sprite = pygame.Surface((1, 1), pygame.SRCALPHA)
             egg_mask = pygame.mask.from_surface(egg_sprite)
             return
 
@@ -612,8 +625,7 @@ def main():
                     card_h if row == 0 else page_rect.height - card_h,
                 )
                 pygame.draw.rect(canvas, (95, 95, 95), card)
-                lock_color = (60, 60, 60)
-                draw_lock_on_card(card, lock_color)
+                draw_lock_on_card(card)
                 label_surf = font.render(label, True, (240, 240, 240))
                 canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * get_canvas_scale()))))
                 locked_surf = font.render("Locked", True, (70, 70, 70))
