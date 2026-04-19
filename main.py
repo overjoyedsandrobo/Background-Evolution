@@ -1,13 +1,14 @@
-from re import A
 import sys
 import os
 import time
 import threading
 import ctypes
 from ctypes import wintypes
+from typing import Optional
 import pygame
 
 WINDOW_W, WINDOW_H = 300, 600
+RESOLUTION_SCALE = 4
 ASPECT_RATIO = WINDOW_W / WINDOW_H
 FPS = 240
 
@@ -134,8 +135,10 @@ def main():
         except Exception:
             pass
 
-    # attempt to load window icon from assets/icon.png (optional)
-    icon_path = os.path.join("assets", "icon.png")
+    # Use egg sprite as the app icon for both title bar and tray.
+    icon_path = os.path.join("assets", "egg.png")
+    if not os.path.exists(icon_path):
+        icon_path = os.path.join("assets", "icon.png")
     try:
         if os.path.exists(icon_path):
             icon_surf = pygame.image.load(icon_path)
@@ -145,7 +148,9 @@ def main():
 
     pygame.display.set_caption("Egg UI Demo")
     screen = pygame.display.set_mode((WINDOW_W, WINDOW_H), pygame.RESIZABLE)
-    canvas = pygame.Surface((WINDOW_W, WINDOW_H))
+    canvas_w = WINDOW_W * RESOLUTION_SCALE
+    canvas_h = WINDOW_H * RESOLUTION_SCALE
+    canvas = pygame.Surface((canvas_w, canvas_h))
     window_size = [WINDOW_W, WINDOW_H]
     viewport = pygame.Rect(0, 0, WINDOW_W, WINDOW_H)
     clock = pygame.time.Clock()
@@ -167,8 +172,8 @@ def main():
     def window_to_canvas(pos):
         if not viewport.collidepoint(pos):
             return None
-        rel_x = (pos[0] - viewport.x) * WINDOW_W / viewport.width
-        rel_y = (pos[1] - viewport.y) * WINDOW_H / viewport.height
+        rel_x = (pos[0] - viewport.x) * canvas_w / viewport.width
+        rel_y = (pos[1] - viewport.y) * canvas_h / viewport.height
         return int(rel_x), int(rel_y)
 
     update_viewport()
@@ -376,7 +381,7 @@ def main():
 
     suppress_system_menu_popup()
 
-    font = pygame.font.SysFont(None, 22)
+    font = pygame.font.SysFont(None, 22 * RESOLUTION_SCALE)
     status_text = "Dormant"
 
     # tray / visibility state
@@ -439,15 +444,69 @@ def main():
     if os.environ.get("SDL_VIDEODRIVER", "") != "dummy":
         start_tray()
 
-    # egg geometry
-    egg_radius = 90
-    egg_x = WINDOW_W // 2
-    egg_y = 220
-    # egg geometry: use separate width/height to make an egg-like oval
-    egg_width = int(egg_radius * 2 * 0.82)  # slightly narrower
-    egg_height = int(egg_radius * 2 * 1.18)  # slightly taller
+    # egg sprite setup
+    egg_radius_base = 90
+    egg_y_base = 220
+    shake_magnitude_base = 5
+    egg_image: Optional[pygame.Surface] = None
+    egg_box_width = int(egg_radius_base * RESOLUTION_SCALE * 3)
+    egg_box_height = int(egg_radius_base * RESOLUTION_SCALE * 3)
+    egg_sprite: pygame.Surface = pygame.Surface((egg_box_width, egg_box_height), pygame.SRCALPHA)
+    pygame.draw.ellipse(egg_sprite, (245, 240, 220), egg_sprite.get_rect())
+    egg_mask: pygame.mask.Mask = pygame.mask.from_surface(egg_sprite)
 
-    shake = ShakeAnimation()
+    egg_path = os.path.join("assets", "egg.png")
+    try:
+        if os.path.exists(egg_path):
+            egg_image = pygame.image.load(egg_path).convert_alpha()
+    except Exception:
+        egg_image = None
+
+    def get_canvas_scale():
+        return canvas_h / WINDOW_H
+
+    def rebuild_egg_sprite():
+        nonlocal egg_sprite, egg_mask
+        egg_radius = max(1, int(egg_radius_base * get_canvas_scale()))
+        egg_box_w = max(1, int(egg_radius * 3))
+        egg_box_h = max(1, int(egg_radius * 3))
+
+        if egg_image is None:
+            fallback = pygame.Surface((egg_box_w, egg_box_h), pygame.SRCALPHA)
+            pygame.draw.ellipse(fallback, (245, 240, 220), fallback.get_rect())
+            egg_sprite = fallback
+            egg_mask = pygame.mask.from_surface(egg_sprite)
+            return
+
+        img_w, img_h = egg_image.get_size()
+        fit_scale = min(egg_box_w / img_w, egg_box_h / img_h)
+        draw_w = max(1, int(img_w * fit_scale))
+        draw_h = max(1, int(img_h * fit_scale))
+        egg_sprite = pygame.transform.smoothscale(egg_image, (draw_w, draw_h))
+        egg_mask = pygame.mask.from_surface(egg_sprite)
+
+    def get_egg_rect(offset_x=0):
+        rect = egg_sprite.get_rect()
+        egg_x = canvas_w // 2
+        egg_y = int(egg_y_base * get_canvas_scale())
+        rect.center = (egg_x + offset_x, egg_y)
+        return rect
+
+    rebuild_egg_sprite()
+
+    def sync_canvas_resolution():
+        nonlocal canvas, canvas_w, canvas_h, font
+        target_w = max(1, viewport.width * RESOLUTION_SCALE)
+        target_h = max(1, viewport.height * RESOLUTION_SCALE)
+        if target_w == canvas_w and target_h == canvas_h:
+            return
+        canvas_w, canvas_h = target_w, target_h
+        canvas = pygame.Surface((canvas_w, canvas_h))
+        font_size = max(12, int(22 * get_canvas_scale()))
+        font = pygame.font.SysFont(None, font_size)
+        rebuild_egg_sprite()
+
+    shake = ShakeAnimation(magnitude=shake_magnitude_base * RESOLUTION_SCALE)
 
     def draw_frame(force_fast_scale=False):
         if not window_visible:
@@ -457,36 +516,22 @@ def main():
         current_size = screen.get_size()
         if current_size[0] != window_size[0] or current_size[1] != window_size[1]:
             update_viewport(current_size)
+        sync_canvas_resolution()
 
         canvas.fill((30, 30, 30))
+        shake.magnitude = max(1, int(shake_magnitude_base * get_canvas_scale()))
 
         status_surf = font.render(status_text, True, (220, 220, 220))
-        status_rect = status_surf.get_rect(center=(WINDOW_W // 2, 36))
+        status_rect = status_surf.get_rect(center=(canvas_w // 2, int(36 * get_canvas_scale())))
         canvas.blit(status_surf, status_rect)
 
         offset_x = shake.get_offset()
-        egg_center = (egg_x + offset_x, egg_y)
-
-        egg_rect_draw = pygame.Rect(0, 0, egg_width, egg_height)
-        # bias the egg slightly downward to feel more egg-like
-        egg_rect_draw.center = (egg_center[0], egg_center[1] + egg_height // 12)
-
-        shadow_rect = egg_rect_draw.copy()
-        shadow_rect.move_ip(6, 12)
-        pygame.draw.ellipse(canvas, (10, 10, 10), shadow_rect)
-
-        pygame.draw.ellipse(canvas, (245, 240, 220), egg_rect_draw)
+        egg_rect_draw = get_egg_rect(offset_x)
+        canvas.blit(egg_sprite, egg_rect_draw)
 
         screen.fill((18, 18, 18))
-        if viewport.width == WINDOW_W and viewport.height == WINDOW_H:
-            screen.blit(canvas, viewport.topleft)
-        else:
-            use_fast_scale = force_fast_scale or is_interactive_resizing
-            if use_fast_scale:
-                scaled = pygame.transform.scale(canvas, (viewport.width, viewport.height))
-            else:
-                scaled = pygame.transform.smoothscale(canvas, (viewport.width, viewport.height))
-            screen.blit(scaled, viewport.topleft)
+        scaled = pygame.transform.smoothscale(canvas, (viewport.width, viewport.height))
+        screen.blit(scaled, viewport.topleft)
 
         pygame.display.flip()
 
@@ -528,10 +573,13 @@ def main():
                 mouse_pos = window_to_canvas(event.pos)
                 if mouse_pos is None:
                     continue
-                egg_hit_rect = pygame.Rect(egg_x - egg_width // 2, egg_y - egg_height // 2, egg_width, egg_height)
+                egg_hit_rect = get_egg_rect(shake.get_offset())
                 if egg_hit_rect.collidepoint(mouse_pos):
-                    shake.trigger()
-                    status_text = "Shaking"
+                    local_x = mouse_pos[0] - egg_hit_rect.left
+                    local_y = mouse_pos[1] - egg_hit_rect.top
+                    if egg_mask.get_at((local_x, local_y)):
+                        shake.trigger()
+                        status_text = "Shaking"
             elif event.type == pygame.USEREVENT:
                 # events from tray callbacks
                 action = getattr(event, "action", None)
