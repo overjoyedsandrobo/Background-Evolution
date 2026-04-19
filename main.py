@@ -383,6 +383,9 @@ def main():
 
     font = pygame.font.SysFont(None, 22 * RESOLUTION_SCALE)
     status_text = "Dormant"
+    current_tab = "stats"
+    stat_items = ["Time Alive", "Features", "Power", "Survivability", "Adaptivness"]
+    path_items = ["Water", "Earth", "Air", "Special"]
 
     # tray / visibility state
     window_visible = True
@@ -465,6 +468,41 @@ def main():
     def get_canvas_scale():
         return canvas_h / WINDOW_H
 
+    def get_ui_layout():
+        scale = get_canvas_scale()
+        padding = 0
+        panel_gap = int(18 * scale)
+        tab_height = int(34 * scale)
+        bottom_margin = 0
+        egg_rect = get_egg_rect(shake.get_offset())
+
+        panel_top = egg_rect.bottom + panel_gap
+        max_panel_top = canvas_h - bottom_margin - tab_height - int(120 * scale)
+        panel_top = min(panel_top, max_panel_top)
+
+        tabs_rect = pygame.Rect(padding, panel_top, max(1, canvas_w - padding * 2), tab_height)
+        page_rect = pygame.Rect(
+            padding,
+            tabs_rect.bottom,
+            max(1, canvas_w - padding * 2),
+            max(1, canvas_h - tabs_rect.bottom - bottom_margin),
+        )
+        tab_w = tabs_rect.width // 2
+        stats_tab_rect = pygame.Rect(tabs_rect.x, tabs_rect.y, tab_w, tabs_rect.height)
+        path_tab_rect = pygame.Rect(tabs_rect.x + tab_w, tabs_rect.y, tabs_rect.width - tab_w, tabs_rect.height)
+
+        return stats_tab_rect, path_tab_rect, page_rect
+
+    def draw_lock_on_card(card_rect, color):
+        body_w = max(8, card_rect.width // 4)
+        body_h = max(8, card_rect.height // 5)
+        body = pygame.Rect(0, 0, body_w, body_h)
+        body.center = (card_rect.centerx, card_rect.centery + body_h // 4)
+        pygame.draw.rect(canvas, color, body, border_radius=max(2, body_w // 6))
+        arc_rect = pygame.Rect(0, 0, body_w, max(10, body_h))
+        arc_rect.center = (card_rect.centerx, body.top + 1)
+        pygame.draw.arc(canvas, color, arc_rect, 3.14159, 0, max(2, body_w // 10))
+
     def rebuild_egg_sprite():
         nonlocal egg_sprite, egg_mask
         egg_radius = max(1, int(egg_radius_base * get_canvas_scale()))
@@ -529,6 +567,63 @@ def main():
         egg_rect_draw = get_egg_rect(offset_x)
         canvas.blit(egg_sprite, egg_rect_draw)
 
+        stats_tab_rect, path_tab_rect, page_rect = get_ui_layout()
+        active_tab_color = (78, 98, 126)
+        inactive_tab_color = (48, 48, 54)
+        border_color = (90, 90, 96)
+        text_color = (230, 230, 230)
+
+        pygame.draw.rect(canvas, active_tab_color if current_tab == "stats" else inactive_tab_color, stats_tab_rect, border_radius=8)
+        pygame.draw.rect(canvas, active_tab_color if current_tab == "path" else inactive_tab_color, path_tab_rect, border_radius=8)
+        pygame.draw.rect(canvas, border_color, stats_tab_rect, 2, border_radius=8)
+        pygame.draw.rect(canvas, border_color, path_tab_rect, 2, border_radius=8)
+
+        stats_tab_text = font.render("Stats", True, text_color)
+        path_tab_text = font.render("Path", True, text_color)
+        canvas.blit(stats_tab_text, stats_tab_text.get_rect(center=stats_tab_rect.center))
+        canvas.blit(path_tab_text, path_tab_text.get_rect(center=path_tab_rect.center))
+
+        pygame.draw.rect(canvas, (40, 40, 44), page_rect, border_radius=10)
+        pygame.draw.rect(canvas, border_color, page_rect, 2, border_radius=10)
+
+        if current_tab == "stats":
+            row_h = max(1, page_rect.height // len(stat_items))
+            for i, label in enumerate(stat_items):
+                row = pygame.Rect(page_rect.x, page_rect.y + i * row_h, page_rect.width, row_h)
+                if i % 2 == 1:
+                    pygame.draw.rect(canvas, (46, 46, 50), row)
+                line_y = row.bottom - 1
+                pygame.draw.line(canvas, (70, 70, 74), (row.x + 6, line_y), (row.right - 6, line_y), 1)
+
+                label_surf = font.render(label, True, (210, 210, 210))
+                value_surf = font.render("0", True, (190, 220, 190))
+                canvas.blit(label_surf, label_surf.get_rect(midleft=(row.x + int(12 * get_canvas_scale()), row.centery)))
+                canvas.blit(value_surf, value_surf.get_rect(midright=(row.right - int(12 * get_canvas_scale()), row.centery)))
+        else:
+            card_w = page_rect.width // 2
+            card_h = page_rect.height // 2
+            for idx, label in enumerate(path_items):
+                col = idx % 2
+                row = idx // 2
+                card = pygame.Rect(
+                    page_rect.x + col * card_w,
+                    page_rect.y + row * card_h,
+                    card_w if col == 0 else page_rect.width - card_w,
+                    card_h if row == 0 else page_rect.height - card_h,
+                )
+                pygame.draw.rect(canvas, (95, 95, 95), card)
+                lock_color = (60, 60, 60)
+                draw_lock_on_card(card, lock_color)
+                label_surf = font.render(label, True, (240, 240, 240))
+                canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * get_canvas_scale()))))
+                locked_surf = font.render("Locked", True, (70, 70, 70))
+                canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * get_canvas_scale()))))
+
+            divider_x = page_rect.x + card_w
+            divider_y = page_rect.y + card_h
+            pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
+            pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
+
         screen.fill((18, 18, 18))
         scaled = pygame.transform.smoothscale(canvas, (viewport.width, viewport.height))
         screen.blit(scaled, viewport.topleft)
@@ -572,6 +667,13 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = window_to_canvas(event.pos)
                 if mouse_pos is None:
+                    continue
+                stats_tab_rect, path_tab_rect, _ = get_ui_layout()
+                if stats_tab_rect.collidepoint(mouse_pos):
+                    current_tab = "stats"
+                    continue
+                if path_tab_rect.collidepoint(mouse_pos):
+                    current_tab = "path"
                     continue
                 egg_hit_rect = get_egg_rect(shake.get_offset())
                 if egg_hit_rect.collidepoint(mouse_pos):
