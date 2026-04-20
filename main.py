@@ -3,6 +3,7 @@ import os
 import time
 import threading
 import ctypes
+import json
 from ctypes import wintypes
 from typing import Optional
 import pygame
@@ -11,6 +12,48 @@ WINDOW_W, WINDOW_H = 300, 600
 RESOLUTION_SCALE = 4
 ASPECT_RATIO = WINDOW_W / WINDOW_H
 FPS = 240
+NUM_SAVE_SLOTS = 3
+AUTOSAVE_INTERVAL_SECONDS = 1.0
+SAVE_FILE_PATH = os.path.join("saves", "save_slots.json")
+START_MENU_BACKGROUND_PATH = os.path.join("assets", "ui", "start_menu_background.png")
+
+
+def _new_slot_state():
+    return {
+        "used": False,
+        "current_tab": "stats",
+        "time_alive_seconds": 0.0,
+    }
+
+
+def load_save_slots():
+    default_slots = [_new_slot_state() for _ in range(NUM_SAVE_SLOTS)]
+    if not os.path.exists(SAVE_FILE_PATH):
+        return default_slots
+    try:
+        with open(SAVE_FILE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            return default_slots
+        slots = []
+        for i in range(NUM_SAVE_SLOTS):
+            candidate = data[i] if i < len(data) and isinstance(data[i], dict) else {}
+            merged = _new_slot_state()
+            merged.update({
+                "used": bool(candidate.get("used", False)),
+                "current_tab": "path" if candidate.get("current_tab") == "path" else "stats",
+                "time_alive_seconds": float(candidate.get("time_alive_seconds", 0.0)),
+            })
+            slots.append(merged)
+        return slots
+    except Exception:
+        return default_slots
+
+
+def write_save_slots(slots):
+    os.makedirs(os.path.dirname(SAVE_FILE_PATH), exist_ok=True)
+    with open(SAVE_FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(slots, f, indent=2)
 
 
 class RECT(ctypes.Structure):
@@ -401,6 +444,72 @@ def main():
     current_tab = "stats"
     stat_items = ["Time Alive", "Features", "Power", "Survivability", "Adaptivness"]
     path_items = ["Water", "Earth", "Air", "Special"]
+    app_screen = "start_menu"
+    save_slots = load_save_slots()
+    active_slot_index: Optional[int] = None
+    time_alive_seconds = 0.0
+    save_dirty = False
+    autosave_timer = 0.0
+    start_bg_image: Optional[pygame.Surface] = load_image_with_fallback(START_MENU_BACKGROUND_PATH)
+
+    def format_time(total_seconds):
+        secs = max(0, int(total_seconds))
+        hours, rem = divmod(secs, 3600)
+        mins, sec = divmod(rem, 60)
+        return f"{hours:02d}:{mins:02d}:{sec:02d}"
+
+    def mark_save_dirty():
+        nonlocal save_dirty
+        if active_slot_index is None:
+            return
+        save_dirty = True
+
+    def save_active_slot(force=False):
+        nonlocal save_dirty
+        if active_slot_index is None:
+            return
+        if (not force) and (not save_dirty):
+            return
+        slot = save_slots[active_slot_index]
+        slot["used"] = True
+        slot["current_tab"] = current_tab
+        slot["time_alive_seconds"] = max(0.0, float(time_alive_seconds))
+        try:
+            write_save_slots(save_slots)
+            save_dirty = False
+        except Exception:
+            pass
+
+    def enter_slot(slot_index, force_new=False):
+        nonlocal active_slot_index, app_screen, current_tab, status_text, time_alive_seconds, save_dirty, autosave_timer
+        active_slot_index = slot_index
+        slot = save_slots[slot_index]
+
+        if force_new or (not slot.get("used", False)):
+            current_tab = "stats"
+            time_alive_seconds = 0.0
+            save_slots[slot_index] = _new_slot_state()
+            save_slots[slot_index]["used"] = True
+        else:
+            current_tab = "path" if slot.get("current_tab") == "path" else "stats"
+            time_alive_seconds = max(0.0, float(slot.get("time_alive_seconds", 0.0)))
+
+        status_text = "Dormant"
+        app_screen = "game"
+        save_dirty = True
+        autosave_timer = 0.0
+        save_active_slot(force=True)
+
+    def get_start_button_rect():
+        btn_w = int(canvas_w * 0.62)
+        btn_h = int(canvas_h * 0.11)
+        return pygame.Rect((canvas_w - btn_w) // 2, int(canvas_h * 0.74), btn_w, btn_h)
+
+    def get_save_slot_rect(slot_index):
+        slot_h = canvas_h // NUM_SAVE_SLOTS
+        top = slot_index * slot_h
+        bottom = canvas_h if slot_index == NUM_SAVE_SLOTS - 1 else (slot_index + 1) * slot_h
+        return pygame.Rect(0, top, canvas_w, bottom - top)
 
     # tray / visibility state
     window_visible = True
@@ -572,69 +681,114 @@ def main():
         canvas.fill((30, 30, 30))
         shake.magnitude = max(1, int(shake_magnitude_base * get_canvas_scale()))
 
-        status_surf = font.render(status_text, True, (220, 220, 220))
-        status_rect = status_surf.get_rect(center=(canvas_w // 2, int(36 * get_canvas_scale())))
-        canvas.blit(status_surf, status_rect)
+        if app_screen == "start_menu":
+            if start_bg_image is not None:
+                bg_scaled = pygame.transform.smoothscale(start_bg_image, (canvas_w, canvas_h))
+                canvas.blit(bg_scaled, (0, 0))
+            else:
+                canvas.fill((22, 30, 44))
 
-        offset_x = shake.get_offset()
-        egg_rect_draw = get_egg_rect(offset_x)
-        canvas.blit(egg_sprite, egg_rect_draw)
+            title_surf = font.render("Evolution Idle", True, (240, 240, 245))
+            canvas.blit(title_surf, title_surf.get_rect(center=(canvas_w // 2, int(canvas_h * 0.18))))
 
-        stats_tab_rect, path_tab_rect, page_rect = get_ui_layout()
-        active_tab_color = (78, 98, 126)
-        inactive_tab_color = (48, 48, 54)
-        border_color = (90, 90, 96)
-        text_color = (230, 230, 230)
+            start_btn = get_start_button_rect()
+            pygame.draw.rect(canvas, (28, 125, 92), start_btn, border_radius=14)
+            pygame.draw.rect(canvas, (200, 240, 226), start_btn, 2, border_radius=14)
+            start_txt = font.render("Start Game", True, (245, 255, 248))
+            canvas.blit(start_txt, start_txt.get_rect(center=start_btn.center))
 
-        pygame.draw.rect(canvas, active_tab_color if current_tab == "stats" else inactive_tab_color, stats_tab_rect, border_radius=8)
-        pygame.draw.rect(canvas, active_tab_color if current_tab == "path" else inactive_tab_color, path_tab_rect, border_radius=8)
-        pygame.draw.rect(canvas, border_color, stats_tab_rect, 2, border_radius=8)
-        pygame.draw.rect(canvas, border_color, path_tab_rect, 2, border_radius=8)
+        elif app_screen == "save_select":
+            for idx in range(NUM_SAVE_SLOTS):
+                slot_rect = get_save_slot_rect(idx)
+                shade = 42 + (idx % 2) * 8
+                pygame.draw.rect(canvas, (shade, shade + 6, shade + 10), slot_rect)
+                pygame.draw.rect(canvas, (85, 95, 110), slot_rect, 2)
 
-        stats_tab_text = font.render("Stats", True, text_color)
-        path_tab_text = font.render("Path", True, text_color)
-        canvas.blit(stats_tab_text, stats_tab_text.get_rect(center=stats_tab_rect.center))
-        canvas.blit(path_tab_text, path_tab_text.get_rect(center=path_tab_rect.center))
+                slot = save_slots[idx]
+                slot_title = font.render(f"Save Slot {idx + 1}", True, (238, 238, 240))
+                canvas.blit(slot_title, slot_title.get_rect(midleft=(int(20 * get_canvas_scale()), slot_rect.top + int(26 * get_canvas_scale()))))
 
-        pygame.draw.rect(canvas, (40, 40, 44), page_rect, border_radius=10)
-        pygame.draw.rect(canvas, border_color, page_rect, 2, border_radius=10)
+                status_label = "Continue" if slot.get("used", False) else "New Game"
+                action_surf = font.render(status_label, True, (180, 225, 190) if slot.get("used", False) else (220, 220, 230))
+                canvas.blit(action_surf, action_surf.get_rect(midleft=(int(20 * get_canvas_scale()), slot_rect.top + int(58 * get_canvas_scale()))))
 
-        if current_tab == "stats":
-            row_h = max(1, page_rect.height // len(stat_items))
-            for i, label in enumerate(stat_items):
-                row = pygame.Rect(page_rect.x, page_rect.y + i * row_h, page_rect.width, row_h)
-                if i % 2 == 1:
-                    pygame.draw.rect(canvas, (46, 46, 50), row)
-                line_y = row.bottom - 1
-                pygame.draw.line(canvas, (70, 70, 74), (row.x + 6, line_y), (row.right - 6, line_y), 1)
+                if slot.get("used", False):
+                    details = f"Time {format_time(slot.get('time_alive_seconds', 0.0))}"
+                    detail_surf = font.render(details, True, (195, 204, 215))
+                    canvas.blit(detail_surf, detail_surf.get_rect(midleft=(int(20 * get_canvas_scale()), slot_rect.top + int(90 * get_canvas_scale()))))
 
-                label_surf = font.render(label, True, (210, 210, 210))
-                value_surf = font.render("0", True, (190, 220, 190))
-                canvas.blit(label_surf, label_surf.get_rect(midleft=(row.x + int(12 * get_canvas_scale()), row.centery)))
-                canvas.blit(value_surf, value_surf.get_rect(midright=(row.right - int(12 * get_canvas_scale()), row.centery)))
         else:
-            card_w = page_rect.width // 2
-            card_h = page_rect.height // 2
-            for idx, label in enumerate(path_items):
-                col = idx % 2
-                row = idx // 2
-                card = pygame.Rect(
-                    page_rect.x + col * card_w,
-                    page_rect.y + row * card_h,
-                    card_w if col == 0 else page_rect.width - card_w,
-                    card_h if row == 0 else page_rect.height - card_h,
-                )
-                pygame.draw.rect(canvas, (95, 95, 95), card)
-                draw_lock_on_card(card)
-                label_surf = font.render(label, True, (240, 240, 240))
-                canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * get_canvas_scale()))))
-                locked_surf = font.render("Locked", True, (70, 70, 70))
-                canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * get_canvas_scale()))))
+            status_surf = font.render(status_text, True, (220, 220, 220))
+            status_rect = status_surf.get_rect(center=(canvas_w // 2, int(36 * get_canvas_scale())))
+            canvas.blit(status_surf, status_rect)
 
-            divider_x = page_rect.x + card_w
-            divider_y = page_rect.y + card_h
-            pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
-            pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
+            offset_x = shake.get_offset()
+            egg_rect_draw = get_egg_rect(offset_x)
+            canvas.blit(egg_sprite, egg_rect_draw)
+
+            stats_tab_rect, path_tab_rect, page_rect = get_ui_layout()
+            active_tab_color = (78, 98, 126)
+            inactive_tab_color = (48, 48, 54)
+            border_color = (90, 90, 96)
+            text_color = (230, 230, 230)
+
+            pygame.draw.rect(canvas, active_tab_color if current_tab == "stats" else inactive_tab_color, stats_tab_rect, border_radius=8)
+            pygame.draw.rect(canvas, active_tab_color if current_tab == "path" else inactive_tab_color, path_tab_rect, border_radius=8)
+            pygame.draw.rect(canvas, border_color, stats_tab_rect, 2, border_radius=8)
+            pygame.draw.rect(canvas, border_color, path_tab_rect, 2, border_radius=8)
+
+            stats_tab_text = font.render("Stats", True, text_color)
+            path_tab_text = font.render("Path", True, text_color)
+            canvas.blit(stats_tab_text, stats_tab_text.get_rect(center=stats_tab_rect.center))
+            canvas.blit(path_tab_text, path_tab_text.get_rect(center=path_tab_rect.center))
+
+            pygame.draw.rect(canvas, (40, 40, 44), page_rect, border_radius=10)
+            pygame.draw.rect(canvas, border_color, page_rect, 2, border_radius=10)
+
+            stat_values = {
+                "Time Alive": format_time(time_alive_seconds),
+                "Features": "0",
+                "Power": "0",
+                "Survivability": "0",
+                "Adaptivness": "0",
+            }
+
+            if current_tab == "stats":
+                row_h = max(1, page_rect.height // len(stat_items))
+                for i, label in enumerate(stat_items):
+                    row = pygame.Rect(page_rect.x, page_rect.y + i * row_h, page_rect.width, row_h)
+                    if i % 2 == 1:
+                        pygame.draw.rect(canvas, (46, 46, 50), row)
+                    line_y = row.bottom - 1
+                    pygame.draw.line(canvas, (70, 70, 74), (row.x + 6, line_y), (row.right - 6, line_y), 1)
+
+                    label_surf = font.render(label, True, (210, 210, 210))
+                    value_surf = font.render(stat_values.get(label, "0"), True, (190, 220, 190))
+                    canvas.blit(label_surf, label_surf.get_rect(midleft=(row.x + int(12 * get_canvas_scale()), row.centery)))
+                    canvas.blit(value_surf, value_surf.get_rect(midright=(row.right - int(12 * get_canvas_scale()), row.centery)))
+            else:
+                card_w = page_rect.width // 2
+                card_h = page_rect.height // 2
+                for idx, label in enumerate(path_items):
+                    col = idx % 2
+                    row = idx // 2
+                    card = pygame.Rect(
+                        page_rect.x + col * card_w,
+                        page_rect.y + row * card_h,
+                        card_w if col == 0 else page_rect.width - card_w,
+                        card_h if row == 0 else page_rect.height - card_h,
+                    )
+                    pygame.draw.rect(canvas, (95, 95, 95), card)
+                    draw_lock_on_card(card)
+                    label_surf = font.render(label, True, (240, 240, 240))
+                    canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * get_canvas_scale()))))
+                    locked_surf = font.render("Locked", True, (70, 70, 70))
+                    canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * get_canvas_scale()))))
+
+                divider_x = page_rect.x + card_w
+                divider_y = page_rect.y + card_h
+                pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
+                pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
 
         screen.fill((18, 18, 18))
         scaled = pygame.transform.smoothscale(canvas, (viewport.width, viewport.height))
@@ -647,10 +801,18 @@ def main():
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
+        if app_screen == "game":
+            time_alive_seconds += dt
+            mark_save_dirty()
+            autosave_timer += dt
+            if autosave_timer >= AUTOSAVE_INTERVAL_SECONDS:
+                autosave_timer = 0.0
+                save_active_slot(force=False)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 # explicit close should terminate app (and tray)
+                save_active_slot(force=True)
                 if tray_icon is not None:
                     try:
                         tray_icon.stop()
@@ -680,12 +842,27 @@ def main():
                 mouse_pos = window_to_canvas(event.pos)
                 if mouse_pos is None:
                     continue
+
+                if app_screen == "start_menu":
+                    if get_start_button_rect().collidepoint(mouse_pos):
+                        app_screen = "save_select"
+                    continue
+
+                if app_screen == "save_select":
+                    selected_slot = min(NUM_SAVE_SLOTS - 1, max(0, (mouse_pos[1] * NUM_SAVE_SLOTS) // max(1, canvas_h)))
+                    enter_slot(selected_slot, force_new=False)
+                    continue
+
                 stats_tab_rect, path_tab_rect, _ = get_ui_layout()
                 if stats_tab_rect.collidepoint(mouse_pos):
-                    current_tab = "stats"
+                    if current_tab != "stats":
+                        current_tab = "stats"
+                        mark_save_dirty()
                     continue
                 if path_tab_rect.collidepoint(mouse_pos):
-                    current_tab = "path"
+                    if current_tab != "path":
+                        current_tab = "path"
+                        mark_save_dirty()
                     continue
                 egg_hit_rect = get_egg_rect(shake.get_offset())
                 if egg_hit_rect.collidepoint(mouse_pos):
@@ -694,6 +871,13 @@ def main():
                     if egg_mask.get_at((local_x, local_y)):
                         shake.trigger()
                         status_text = "Shaking"
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                if app_screen == "game":
+                    save_active_slot(force=True)
+                    app_screen = "save_select"
+                    active_slot_index = None
+                elif app_screen == "save_select":
+                    app_screen = "start_menu"
             elif event.type == pygame.USEREVENT:
                 # events from tray callbacks
                 action = getattr(event, "action", None)
@@ -708,6 +892,7 @@ def main():
                         pass
                 elif action == "exit":
                     # stop tray then quit
+                    save_active_slot(force=True)
                     if tray_icon is not None:
                         try:
                             tray_icon.stop()
@@ -715,11 +900,13 @@ def main():
                             pass
                     running = False
 
-        prev_active = shake.active
-        shake.update(dt)
-        # if shake stopped this frame, revert status
-        if prev_active and not shake.active:
-            status_text = "Dormant"
+        if app_screen == "game":
+            prev_active = shake.active
+            shake.update(dt)
+            # if shake stopped this frame, revert status
+            if prev_active and not shake.active:
+                status_text = "Dormant"
+                mark_save_dirty()
 
         if window_visible:
             draw_frame()
