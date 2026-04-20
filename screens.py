@@ -37,6 +37,17 @@ def get_ui_layout(canvas_w, canvas_h, egg_rect, canvas_scale):
     return stats_tab_rect, path_tab_rect, page_rect
 
 
+def get_stats_row_rect_for_label(canvas_w, canvas_h, egg_rect, canvas_scale, stat_items, target_label):
+    _, _, page_rect = get_ui_layout(canvas_w, canvas_h, egg_rect, canvas_scale)
+    if not stat_items:
+        return None
+    row_h = max(1, page_rect.height // len(stat_items))
+    for i, label in enumerate(stat_items):
+        if label == target_label:
+            return pygame.Rect(page_rect.x, page_rect.y + i * row_h, page_rect.width, row_h)
+    return None
+
+
 def draw_lock_on_card(canvas, lock_image, card_rect):
     if lock_image is None:
         return
@@ -58,7 +69,7 @@ def draw_start_menu(canvas, canvas_w, canvas_h, font, start_bg_image):
     else:
         canvas.fill((22, 30, 44))
 
-    title_surf = font.render("Evolution Idle", True, (240, 240, 245))
+    title_surf = font.render("Background Evolution", True, (240, 240, 245))
     canvas.blit(title_surf, title_surf.get_rect(center=(canvas_w // 2, int(canvas_h * 0.18))))
 
     start_btn = get_start_button_rect(canvas_w, canvas_h)
@@ -136,6 +147,7 @@ def draw_game_screen(
         "Power": "0",
         "Survivability": "0",
         "Adaptivness": "0",
+        "Extra Stats": "",
     }
 
     if current_tab == "stats":
@@ -147,8 +159,10 @@ def draw_game_screen(
             line_y = row.bottom - 1
             pygame.draw.line(canvas, (70, 70, 74), (row.x + 6, line_y), (row.right - 6, line_y), 1)
 
-            label_surf = font.render(label, True, (210, 210, 210))
-            value_surf = font.render(stat_values.get(label, "0"), True, (190, 220, 190))
+            label_color = (180, 220, 255) if label == "Extra Stats" else (210, 210, 210)
+            value_color = (150, 220, 255) if label == "Extra Stats" else (190, 220, 190)
+            label_surf = font.render(label, True, label_color)
+            value_surf = font.render(stat_values.get(label, "0"), True, value_color)
             canvas.blit(label_surf, label_surf.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery)))
             canvas.blit(value_surf, value_surf.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)))
     else:
@@ -176,3 +190,28 @@ def draw_game_screen(
         pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
 
     return stats_tab_rect, path_tab_rect
+
+
+def draw_extra_stats_page(canvas, canvas_w, canvas_h, font, canvas_scale, extra_stats):
+    canvas.fill((26, 30, 36))
+    title = font.render("Extra Stats", True, (236, 242, 248))
+    canvas.blit(title, title.get_rect(midtop=(canvas_w // 2, int(16 * canvas_scale))))
+
+    panel_top = int(56 * canvas_scale)
+    panel = pygame.Rect(0, panel_top, canvas_w, max(1, canvas_h - panel_top))
+    pygame.draw.rect(canvas, (40, 45, 52), panel)
+    pygame.draw.line(canvas, (86, 96, 108), (panel.x, panel.y), (panel.right, panel.y), 2)
+
+    all_items = list(extra_stats)
+    if not all_items:
+        return
+
+    row_h = max(1, panel.height // len(all_items))
+    for i, label in enumerate(all_items):
+        row = pygame.Rect(panel.x, panel.y + i * row_h, panel.width, row_h)
+        if i % 2 == 1:
+            pygame.draw.rect(canvas, (46, 52, 60), row)
+        label_text = font.render(label, True, (213, 225, 238))
+        value_text = font.render("0", True, (190, 220, 190))
+        canvas.blit(label_text, label_text.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery)))
+        canvas.blit(value_text, value_text.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)))

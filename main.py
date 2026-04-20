@@ -10,9 +10,11 @@ from ui_helpers import ShakeAnimation, format_time
 from win32_types import RECT, POINT, MINMAXINFO, MONITORINFO
 from tray_support import start_tray_icon
 from screens import (
+    draw_extra_stats_page,
     draw_game_screen,
     draw_save_select,
     draw_start_menu,
+    get_stats_row_rect_for_label,
     get_start_button_rect,
     get_ui_layout,
 )
@@ -352,7 +354,21 @@ def main():
     font = pygame.font.SysFont(None, 22 * RESOLUTION_SCALE)
     status_text = "Dormant"
     current_tab = "stats"
-    stat_items = ["Time Alive", "Features", "Power", "Survivability", "Adaptivness"]
+    stat_items = ["Time Alive", "Features", "Power", "Survivability", "Adaptivness", "Extra Stats"]
+    extra_stats_items = [
+        "Charisma",
+        "Happiness",
+        "Violence",
+        "Curiosity",
+        "Laziness",
+        "Purpose",
+        "Sex Drive",
+        "Likeliness of being a pikachu",
+        "Stability",
+        "Wisdom",
+        "Intelligence",
+        "More to come soon....",
+    ]
     path_items = ["Water", "Earth", "Air", "Special"]
     app_screen = "start_menu"
     save_slots = load_save_slots(NUM_SAVE_SLOTS)
@@ -425,7 +441,7 @@ def main():
         tray_icon = start_tray_icon(
             icon_path=icon_path,
             fallback_path=image_not_found_path,
-            title="Evolution Idle",
+            title="Background Evolution",
             on_restore=on_restore,
             on_exit=on_exit,
         )
@@ -507,7 +523,7 @@ def main():
         elif app_screen == "save_select":
             draw_save_select(canvas, canvas_w, canvas_h, font, save_slots, NUM_SAVE_SLOTS, scale, format_time)
 
-        else:
+        elif app_screen == "game":
             offset_x = shake.get_offset()
             egg_rect_draw = get_egg_rect(offset_x)
             draw_game_screen(
@@ -526,6 +542,15 @@ def main():
                 format_time,
                 lock_image,
             )
+        else:
+            draw_extra_stats_page(
+                canvas,
+                canvas_w,
+                canvas_h,
+                font,
+                scale,
+                extra_stats_items,
+            )
 
         screen.fill((18, 18, 18))
         scaled = pygame.transform.smoothscale(canvas, (viewport.width, viewport.height))
@@ -538,7 +563,7 @@ def main():
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
-        if app_screen == "game":
+        if app_screen in ("game", "extra_stats"):
             time_alive_seconds += dt
             mark_save_dirty()
             autosave_timer += dt
@@ -589,6 +614,8 @@ def main():
                     selected_slot = min(NUM_SAVE_SLOTS - 1, max(0, (mouse_pos[1] * NUM_SAVE_SLOTS) // max(1, canvas_h)))
                     enter_slot(selected_slot, force_new=False)
                     continue
+                if app_screen == "extra_stats":
+                    continue
 
                 stats_tab_rect, path_tab_rect, _ = get_ui_layout(
                     canvas_w,
@@ -606,6 +633,18 @@ def main():
                         current_tab = "path"
                         mark_save_dirty()
                     continue
+                if current_tab == "stats":
+                    extra_stats_rect = get_stats_row_rect_for_label(
+                        canvas_w,
+                        canvas_h,
+                        get_egg_rect(shake.get_offset()),
+                        get_canvas_scale(),
+                        stat_items,
+                        "Extra Stats",
+                    )
+                    if extra_stats_rect is not None and extra_stats_rect.collidepoint(mouse_pos):
+                        app_screen = "extra_stats"
+                        continue
                 egg_hit_rect = get_egg_rect(shake.get_offset())
                 if egg_hit_rect.collidepoint(mouse_pos):
                     local_x = mouse_pos[0] - egg_hit_rect.left
@@ -614,7 +653,9 @@ def main():
                         shake.trigger()
                         status_text = "Shaking"
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                if app_screen == "game":
+                if app_screen == "extra_stats":
+                    app_screen = "game"
+                elif app_screen == "game":
                     save_active_slot(force=True)
                     app_screen = "save_select"
                     active_slot_index = None

@@ -25,7 +25,7 @@ def start_tray_icon(icon_path, fallback_path, title, on_restore, on_exit):
 
     try:
         tray_icon = pystray.Icon(
-            "evolution_idle",
+            "background_evolution",
             img,
             title,
             menu=pystray.Menu(
