@@ -24,10 +24,13 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
         slots = []
         for i in range(num_slots):
             candidate = data[i] if i < len(data) and isinstance(data[i], dict) else {}
+            tab_value = candidate.get("current_tab")
+            if tab_value == "path":
+                tab_value = "environment"
             merged = new_slot_state()
             merged.update({
                 "used": bool(candidate.get("used", False)),
-                "current_tab": "path" if candidate.get("current_tab") == "path" else "stats",
+                "current_tab": "environment" if tab_value == "environment" else "stats",
                 "time_alive_seconds": float(candidate.get("time_alive_seconds", 0.0)),
             })
             slots.append(merged)

@@ -369,7 +369,7 @@ def main():
         "Intelligence",
         "More to come soon....",
     ]
-    path_items = ["Water", "Earth", "Air", "Special"]
+    environment_items = ["Water", "Earth", "Air", "Hidden"]
     app_screen = "start_menu"
     save_slots = load_save_slots(NUM_SAVE_SLOTS)
     active_slot_index: Optional[int] = None
@@ -411,7 +411,7 @@ def main():
             save_slots[slot_index] = new_slot_state()
             save_slots[slot_index]["used"] = True
         else:
-            current_tab = "path" if slot.get("current_tab") == "path" else "stats"
+            current_tab = "environment" if slot.get("current_tab") == "environment" else "stats"
             time_alive_seconds = max(0.0, float(slot.get("time_alive_seconds", 0.0)))
 
         status_text = "Dormant"
@@ -537,7 +537,7 @@ def main():
                 egg_rect_draw,
                 current_tab,
                 stat_items,
-                path_items,
+                environment_items,
                 time_alive_seconds,
                 format_time,
                 lock_image,
@@ -617,7 +617,7 @@ def main():
                 if app_screen == "extra_stats":
                     continue
 
-                stats_tab_rect, path_tab_rect, _ = get_ui_layout(
+                stats_tab_rect, environment_tab_rect, _ = get_ui_layout(
                     canvas_w,
                     canvas_h,
                     get_egg_rect(shake.get_offset()),
@@ -628,9 +628,9 @@ def main():
                         current_tab = "stats"
                         mark_save_dirty()
                     continue
-                if path_tab_rect.collidepoint(mouse_pos):
-                    if current_tab != "path":
-                        current_tab = "path"
+                if environment_tab_rect.collidepoint(mouse_pos):
+                    if current_tab != "environment":
+                        current_tab = "environment"
                         mark_save_dirty()
                     continue
                 if current_tab == "stats":

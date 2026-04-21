@@ -33,8 +33,8 @@ def get_ui_layout(canvas_w, canvas_h, egg_rect, canvas_scale):
     )
     tab_w = tabs_rect.width // 2
     stats_tab_rect = pygame.Rect(tabs_rect.x, tabs_rect.y, tab_w, tabs_rect.height)
-    path_tab_rect = pygame.Rect(tabs_rect.x + tab_w, tabs_rect.y, tabs_rect.width - tab_w, tabs_rect.height)
-    return stats_tab_rect, path_tab_rect, page_rect
+    environment_tab_rect = pygame.Rect(tabs_rect.x + tab_w, tabs_rect.y, tabs_rect.width - tab_w, tabs_rect.height)
+    return stats_tab_rect, environment_tab_rect, page_rect
 
 
 def get_stats_row_rect_for_label(canvas_w, canvas_h, egg_rect, canvas_scale, stat_items, target_label):
@@ -112,7 +112,7 @@ def draw_game_screen(
     egg_rect_draw,
     current_tab,
     stat_items,
-    path_items,
+    environment_items,
     time_alive_seconds,
     format_time,
     lock_image,
@@ -122,21 +122,21 @@ def draw_game_screen(
     canvas.blit(status_surf, status_rect)
     canvas.blit(egg_sprite, egg_rect_draw)
 
-    stats_tab_rect, path_tab_rect, page_rect = get_ui_layout(canvas_w, canvas_h, egg_rect_draw, canvas_scale)
+    stats_tab_rect, environment_tab_rect, page_rect = get_ui_layout(canvas_w, canvas_h, egg_rect_draw, canvas_scale)
     active_tab_color = (78, 98, 126)
     inactive_tab_color = (48, 48, 54)
     border_color = (90, 90, 96)
     text_color = (230, 230, 230)
 
     pygame.draw.rect(canvas, active_tab_color if current_tab == "stats" else inactive_tab_color, stats_tab_rect, border_radius=8)
-    pygame.draw.rect(canvas, active_tab_color if current_tab == "path" else inactive_tab_color, path_tab_rect, border_radius=8)
+    pygame.draw.rect(canvas, active_tab_color if current_tab == "environment" else inactive_tab_color, environment_tab_rect, border_radius=8)
     pygame.draw.rect(canvas, border_color, stats_tab_rect, 2, border_radius=8)
-    pygame.draw.rect(canvas, border_color, path_tab_rect, 2, border_radius=8)
+    pygame.draw.rect(canvas, border_color, environment_tab_rect, 2, border_radius=8)
 
     stats_tab_text = font.render("Stats", True, text_color)
-    path_tab_text = font.render("Path", True, text_color)
+    environment_tab_text = font.render("Environment", True, text_color)
     canvas.blit(stats_tab_text, stats_tab_text.get_rect(center=stats_tab_rect.center))
-    canvas.blit(path_tab_text, path_tab_text.get_rect(center=path_tab_rect.center))
+    canvas.blit(environment_tab_text, environment_tab_text.get_rect(center=environment_tab_rect.center))
 
     pygame.draw.rect(canvas, (40, 40, 44), page_rect, border_radius=10)
     pygame.draw.rect(canvas, border_color, page_rect, 2, border_radius=10)
@@ -168,7 +168,7 @@ def draw_game_screen(
     else:
         card_w = page_rect.width // 2
         card_h = page_rect.height // 2
-        for idx, label in enumerate(path_items):
+        for idx, label in enumerate(environment_items):
             col = idx % 2
             row = idx // 2
             card = pygame.Rect(
@@ -189,7 +189,7 @@ def draw_game_screen(
         pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
         pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
 
-    return stats_tab_rect, path_tab_rect
+    return stats_tab_rect, environment_tab_rect
 
 
 def draw_extra_stats_page(canvas, canvas_w, canvas_h, font, canvas_scale, extra_stats):
