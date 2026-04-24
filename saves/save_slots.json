@@ -2,16 +2,43 @@
   {
     "used": true,
     "current_tab": "environment",
-    "time_alive_seconds": 1649.6529999988186
+    "time_alive_seconds": 283.9149999999952,
+    "evolution_stage": "petawaru",
+    "evolution_click_progress": 0,
+    "selected_environment": "water",
+    "environment_time_seconds": {
+      "water": 15.70200000000005,
+      "earth": 48.03100000000009,
+      "air": 0.0
+    },
+    "hidden_revealed": true
   },
   {
     "used": true,
-    "current_tab": "stats",
-    "time_alive_seconds": 11.897999999999614
+    "current_tab": "environment",
+    "time_alive_seconds": 33.32400000000027,
+    "evolution_stage": "cracked",
+    "evolution_click_progress": 1,
+    "selected_environment": null,
+    "environment_time_seconds": {
+      "water": 3.217999999999996,
+      "earth": 0.9860000000000005,
+      "air": 0.6110000000000002
+    },
+    "hidden_revealed": false
   },
   {
     "used": true,
-    "current_tab": "stats",
-    "time_alive_seconds": 2.5129999999999924
+    "current_tab": "environment",
+    "time_alive_seconds": 36.80899999999978,
+    "evolution_stage": "petawaru",
+    "evolution_click_progress": 0,
+    "selected_environment": "water",
+    "environment_time_seconds": {
+      "water": 15.930000000000076,
+      "earth": 2.0079999999999987,
+      "air": 16.357999999999944
+    },
+    "hidden_revealed": false
   }
 ]

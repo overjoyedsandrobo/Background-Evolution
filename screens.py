@@ -48,6 +48,20 @@ def get_stats_row_rect_for_label(canvas_w, canvas_h, egg_rect, canvas_scale, sta
     return None
 
 
+def get_environment_card_rect(canvas_w, canvas_h, egg_rect, canvas_scale, index):
+    _, _, page_rect = get_ui_layout(canvas_w, canvas_h, egg_rect, canvas_scale)
+    card_w = page_rect.width // 2
+    card_h = page_rect.height // 2
+    col = index % 2
+    row = index // 2
+    return pygame.Rect(
+        page_rect.x + col * card_w,
+        page_rect.y + row * card_h,
+        card_w if col == 0 else page_rect.width - card_w,
+        card_h if row == 0 else page_rect.height - card_h,
+    )
+
+
 def draw_lock_on_card(canvas, lock_image, card_rect):
     if lock_image is None:
         return
@@ -106,23 +120,34 @@ def draw_game_screen(
     canvas_w,
     canvas_h,
     font,
+    status_font,
     canvas_scale,
     status_text,
     egg_sprite,
     egg_rect_draw,
+    layout_anchor_rect,
     current_tab,
     stat_items,
     environment_items,
     time_alive_seconds,
     format_time,
     lock_image,
+    selected_environment,
+    hidden_revealed,
+    environment_bg_surface,
+    environment_card_backgrounds,
+    environments_unlocked,
 ):
-    status_surf = font.render(status_text, True, (220, 220, 220))
+    if environment_bg_surface is not None:
+        bg_scaled = pygame.transform.smoothscale(environment_bg_surface, (canvas_w, canvas_h))
+        canvas.blit(bg_scaled, (0, 0))
+
+    status_surf = status_font.render(status_text, True, (220, 220, 220))
     status_rect = status_surf.get_rect(center=(canvas_w // 2, int(36 * canvas_scale)))
     canvas.blit(status_surf, status_rect)
     canvas.blit(egg_sprite, egg_rect_draw)
 
-    stats_tab_rect, environment_tab_rect, page_rect = get_ui_layout(canvas_w, canvas_h, egg_rect_draw, canvas_scale)
+    stats_tab_rect, environment_tab_rect, page_rect = get_ui_layout(canvas_w, canvas_h, layout_anchor_rect, canvas_scale)
     active_tab_color = (78, 98, 126)
     inactive_tab_color = (48, 48, 54)
     border_color = (90, 90, 96)
@@ -166,26 +191,40 @@ def draw_game_screen(
             canvas.blit(label_surf, label_surf.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery)))
             canvas.blit(value_surf, value_surf.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)))
     else:
-        card_w = page_rect.width // 2
-        card_h = page_rect.height // 2
         for idx, label in enumerate(environment_items):
-            col = idx % 2
-            row = idx // 2
-            card = pygame.Rect(
-                page_rect.x + col * card_w,
-                page_rect.y + row * card_h,
-                card_w if col == 0 else page_rect.width - card_w,
-                card_h if row == 0 else page_rect.height - card_h,
-            )
+            env_key = label.lower()
+            card = get_environment_card_rect(canvas_w, canvas_h, layout_anchor_rect, canvas_scale, idx)
+            is_hidden = env_key == "hidden"
+            is_base_environment = env_key in {"water", "earth", "air"}
+            is_locked = (is_base_environment and (not environments_unlocked)) or (is_hidden and (not hidden_revealed))
+            is_selected = (env_key == selected_environment)
+
             pygame.draw.rect(canvas, (95, 95, 95), card)
-            draw_lock_on_card(canvas, lock_image, card)
+            card_bg = environment_card_backgrounds.get(env_key)
+            if card_bg is not None:
+                card_bg_scaled = pygame.transform.smoothscale(card_bg, (card.width, card.height))
+                canvas.blit(card_bg_scaled, card)
+            if is_locked:
+                dark_overlay = pygame.Surface((card.width, card.height), pygame.SRCALPHA)
+                dark_overlay.fill((0, 0, 0, 120))
+                canvas.blit(dark_overlay, card.topleft)
+            if is_selected:
+                overlay = pygame.Surface((card.width, card.height), pygame.SRCALPHA)
+                overlay.fill((72, 105, 88, 85))
+                canvas.blit(overlay, card.topleft)
+            if is_locked:
+                draw_lock_on_card(canvas, lock_image, card)
             label_surf = font.render(label, True, (240, 240, 240))
             canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * canvas_scale))))
-            locked_surf = font.render("Locked", True, (70, 70, 70))
-            canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * canvas_scale))))
+            if is_locked:
+                locked_surf = font.render("Locked", True, (70, 70, 70))
+                canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * canvas_scale))))
+            elif is_selected:
+                selected_surf = font.render("Selected", True, (215, 245, 215))
+                canvas.blit(selected_surf, selected_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * canvas_scale))))
 
-        divider_x = page_rect.x + card_w
-        divider_y = page_rect.y + card_h
+        divider_x = page_rect.x + (page_rect.width // 2)
+        divider_y = page_rect.y + (page_rect.height // 2)
         pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
         pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
 

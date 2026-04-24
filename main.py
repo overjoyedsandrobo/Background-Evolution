@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import ctypes
+import math
 from ctypes import wintypes
 from typing import Optional
 import pygame
@@ -14,6 +15,7 @@ from screens import (
     draw_game_screen,
     draw_save_select,
     draw_start_menu,
+    get_environment_card_rect,
     get_stats_row_rect_for_label,
     get_start_button_rect,
     get_ui_layout,
@@ -26,6 +28,8 @@ FPS = 240
 NUM_SAVE_SLOTS = 3
 AUTOSAVE_INTERVAL_SECONDS = 1.0
 START_MENU_BACKGROUND_PATH = os.path.join("assets", "icons", "background", "start_menu.png")
+PETAWARU_IMAGE_PATH = os.path.join("assets", "icons", "monster", "petawaru.png")
+HIDDEN_UNLOCK_THRESHOLD_SECONDS = 60.0
 
 
 # tray support is imported at runtime inside start_tray() to satisfy static analysis
@@ -45,7 +49,15 @@ def main():
                 if os.path.exists(path):
                     surf = pygame.image.load(path)
                     if pygame.display.get_surface() is not None:
-                        return surf.convert_alpha()
+                        try:
+                            surf = surf.convert_alpha()
+                        except Exception:
+                            surf = surf.convert()
+                        # For assets that use color-key transparency instead of alpha,
+                        # treat the top-left pixel as transparent.
+                        if not (surf.get_flags() & pygame.SRCALPHA):
+                            surf.set_colorkey(surf.get_at((0, 0)))
+                        return surf
                     return surf
             except Exception:
                 pass
@@ -104,7 +116,7 @@ def main():
             pass
 
     # Use egg sprite as the app icon for both title bar and tray.
-    egg_path = os.path.join("assets", "icons", "egg", "egg.png")
+    egg_path = os.path.join("assets", "icons", "egg", "egg1.png")
     icon_path = egg_path
     lock_path = os.path.join("assets", "icons", "misc", "lock.webp")
     lock_image: Optional[pygame.Surface] = None
@@ -352,7 +364,14 @@ def main():
     suppress_system_menu_popup()
 
     font = pygame.font.SysFont(None, 22 * RESOLUTION_SCALE)
-    status_text = "Dormant"
+    status_font = pygame.font.SysFont(None, int(34 * RESOLUTION_SCALE))
+    evolution_stage = "dormant"
+    evolution_click_progress = 0
+    status_flash_text = ""
+    status_flash_timer = 0.0
+    hatching_animation_active = False
+    hatching_animation_timer = 0.0
+    hatching_animation_duration = 5.0
     current_tab = "stats"
     stat_items = ["Time Alive", "Features", "Power", "Survivability", "Adaptivness", "Extra Stats"]
     extra_stats_items = [
@@ -370,6 +389,9 @@ def main():
         "More to come soon....",
     ]
     environment_items = ["Water", "Earth", "Air", "Hidden"]
+    selected_environment = None
+    environment_time_seconds = {"water": 0.0, "earth": 0.0, "air": 0.0}
+    hidden_revealed = False
     app_screen = "start_menu"
     save_slots = load_save_slots(NUM_SAVE_SLOTS)
     active_slot_index: Optional[int] = None
@@ -377,12 +399,32 @@ def main():
     save_dirty = False
     autosave_timer = 0.0
     start_bg_image: Optional[pygame.Surface] = load_image_with_fallback(START_MENU_BACKGROUND_PATH)
+    environment_backgrounds = {
+        "water": load_image_with_fallback(os.path.join("assets", "icons", "background", "water.png")),
+        "earth": load_image_with_fallback(os.path.join("assets", "icons", "background", "earth.png")),
+        "air": load_image_with_fallback(os.path.join("assets", "icons", "background", "air.png")),
+        "hidden": load_image_with_fallback(os.path.join("assets", "icons", "background", "hidden.png")),
+    }
 
     def mark_save_dirty():
         nonlocal save_dirty
         if active_slot_index is None:
             return
         save_dirty = True
+
+    def get_stage_label():
+        if evolution_stage == "cracked":
+            return "Cracked"
+        if evolution_stage == "hatching":
+            return "Hatching"
+        if evolution_stage == "petawaru":
+            return "Petawaru"
+        return "Dormant"
+
+    def get_status_text():
+        if status_flash_timer > 0.0 and status_flash_text:
+            return status_flash_text
+        return get_stage_label()
 
     def save_active_slot(force=False):
         nonlocal save_dirty
@@ -394,6 +436,15 @@ def main():
         slot["used"] = True
         slot["current_tab"] = current_tab
         slot["time_alive_seconds"] = max(0.0, float(time_alive_seconds))
+        slot["evolution_stage"] = evolution_stage
+        slot["evolution_click_progress"] = max(0, min(2, int(evolution_click_progress)))
+        slot["selected_environment"] = selected_environment
+        slot["environment_time_seconds"] = {
+            "water": max(0.0, float(environment_time_seconds["water"])),
+            "earth": max(0.0, float(environment_time_seconds["earth"])),
+            "air": max(0.0, float(environment_time_seconds["air"])),
+        }
+        slot["hidden_revealed"] = bool(hidden_revealed)
         try:
             write_save_slots(save_slots)
             save_dirty = False
@@ -401,7 +452,10 @@ def main():
             pass
 
     def enter_slot(slot_index, force_new=False):
-        nonlocal active_slot_index, app_screen, current_tab, status_text, time_alive_seconds, save_dirty, autosave_timer
+        nonlocal active_slot_index, app_screen, current_tab, time_alive_seconds, save_dirty, autosave_timer
+        nonlocal evolution_stage, evolution_click_progress, status_flash_text, status_flash_timer
+        nonlocal hatching_animation_active, hatching_animation_timer, egg_image
+        nonlocal selected_environment, environment_time_seconds, hidden_revealed
         active_slot_index = slot_index
         slot = save_slots[slot_index]
 
@@ -410,11 +464,47 @@ def main():
             time_alive_seconds = 0.0
             save_slots[slot_index] = new_slot_state()
             save_slots[slot_index]["used"] = True
+            evolution_stage = "dormant"
+            evolution_click_progress = 0
+            selected_environment = None
+            environment_time_seconds = {"water": 0.0, "earth": 0.0, "air": 0.0}
+            hidden_revealed = False
         else:
             current_tab = "environment" if slot.get("current_tab") == "environment" else "stats"
             time_alive_seconds = max(0.0, float(slot.get("time_alive_seconds", 0.0)))
+            evolution_stage = slot.get("evolution_stage", "dormant")
+            if evolution_stage not in {"dormant", "cracked", "hatching", "petawaru"}:
+                evolution_stage = "dormant"
+            evolution_click_progress = max(0, min(2, int(slot.get("evolution_click_progress", 0))))
+            selected_raw = slot.get("selected_environment", None)
+            if selected_raw is None:
+                selected_environment = None
+            else:
+                selected_environment = str(selected_raw).lower()
+                if selected_environment not in {"water", "earth", "air", "hidden"}:
+                    selected_environment = None
+            loaded_times = slot.get("environment_time_seconds", {})
+            environment_time_seconds = {
+                "water": max(0.0, float(loaded_times.get("water", 0.0))),
+                "earth": max(0.0, float(loaded_times.get("earth", 0.0))),
+                "air": max(0.0, float(loaded_times.get("air", 0.0))),
+            }
+            hidden_revealed = bool(slot.get("hidden_revealed", False))
+            if (environment_time_seconds["water"] + environment_time_seconds["earth"] + environment_time_seconds["air"]) >= HIDDEN_UNLOCK_THRESHOLD_SECONDS:
+                hidden_revealed = True
+            if selected_environment == "hidden" and not hidden_revealed:
+                selected_environment = None
+            if evolution_stage == "hatching":
+                # Resume from the pre-hatch state and require the final trigger again.
+                evolution_stage = "cracked"
+                evolution_click_progress = 1
 
-        status_text = "Dormant"
+        status_flash_text = ""
+        status_flash_timer = 0.0
+        hatching_animation_active = False
+        hatching_animation_timer = 0.0
+        egg_image = petawaru_image if evolution_stage == "petawaru" else base_egg_image
+        rebuild_egg_sprite()
         app_screen = "game"
         save_dirty = True
         autosave_timer = 0.0
@@ -450,14 +540,14 @@ def main():
     egg_radius_base = 90
     egg_y_base = 220
     shake_magnitude_base = 5
-    egg_image: Optional[pygame.Surface] = None
+    base_egg_image: Optional[pygame.Surface] = load_image_with_fallback(egg_path)
+    petawaru_image: Optional[pygame.Surface] = load_image_with_fallback(PETAWARU_IMAGE_PATH)
+    egg_image: Optional[pygame.Surface] = petawaru_image if evolution_stage == "petawaru" else base_egg_image
     egg_box_width = int(egg_radius_base * RESOLUTION_SCALE * 3)
     egg_box_height = int(egg_radius_base * RESOLUTION_SCALE * 3)
     egg_sprite: pygame.Surface = pygame.Surface((egg_box_width, egg_box_height), pygame.SRCALPHA)
     pygame.draw.ellipse(egg_sprite, (245, 240, 220), egg_sprite.get_rect())
     egg_mask: pygame.mask.Mask = pygame.mask.from_surface(egg_sprite)
-
-    egg_image = load_image_with_fallback(egg_path)
 
     def get_canvas_scale():
         return canvas_h / WINDOW_H
@@ -487,10 +577,45 @@ def main():
         rect.center = (egg_x + offset_x, egg_y)
         return rect
 
+    def get_draw_egg_for_frame(offset_x):
+        if not hatching_animation_active:
+            rect = get_egg_rect(offset_x)
+            return egg_sprite, rect, 0.0
+
+        progress = min(1.0, max(0.0, hatching_animation_timer / hatching_animation_duration))
+        pulse = math.sin(progress * math.pi * 10.0)
+        size_scale = 1.0 + 0.12 * pulse
+        anim_w = max(1, int(egg_sprite.get_width() * size_scale))
+        anim_h = max(1, int(egg_sprite.get_height() * size_scale))
+        anim_sprite = pygame.transform.smoothscale(egg_sprite, (anim_w, anim_h))
+
+        shake = int((1.0 - progress * 0.4) * 18 * math.sin(progress * math.pi * 34.0))
+        rect = anim_sprite.get_rect(center=(canvas_w // 2 + offset_x + shake, int(egg_y_base * get_canvas_scale())))
+        return anim_sprite, rect, progress
+
+    def draw_hatching_cracks(rect, progress):
+        if progress <= 0.0:
+            return
+        crack_color = (40, 24, 18)
+        branches = [
+            ((0.00, -0.32), (0.02, 0.12)),
+            ((0.02, 0.12), (-0.15, 0.32)),
+            ((0.02, 0.12), (0.18, 0.36)),
+            ((-0.10, -0.12), (-0.22, 0.06)),
+            ((0.08, -0.20), (0.25, -0.02)),
+        ]
+        visible = max(1, int(len(branches) * progress + 0.99))
+        thickness = max(1, int(2 * get_canvas_scale() * (0.35 + progress)))
+        for idx in range(min(visible, len(branches))):
+            (sx, sy), (ex, ey) = branches[idx]
+            start = (int(rect.centerx + sx * rect.width), int(rect.centery + sy * rect.height))
+            end = (int(rect.centerx + ex * rect.width), int(rect.centery + ey * rect.height))
+            pygame.draw.line(canvas, crack_color, start, end, thickness)
+
     rebuild_egg_sprite()
 
     def sync_canvas_resolution():
-        nonlocal canvas, canvas_w, canvas_h, font
+        nonlocal canvas, canvas_w, canvas_h, font, status_font
         target_w = max(1, viewport.width * RESOLUTION_SCALE)
         target_h = max(1, viewport.height * RESOLUTION_SCALE)
         if target_w == canvas_w and target_h == canvas_h:
@@ -498,7 +623,9 @@ def main():
         canvas_w, canvas_h = target_w, target_h
         canvas = pygame.Surface((canvas_w, canvas_h))
         font_size = max(12, int(22 * get_canvas_scale()))
+        status_font_size = max(18, int(34 * get_canvas_scale()))
         font = pygame.font.SysFont(None, font_size)
+        status_font = pygame.font.SysFont(None, status_font_size)
         rebuild_egg_sprite()
 
     shake = ShakeAnimation(magnitude=shake_magnitude_base * RESOLUTION_SCALE)
@@ -525,23 +652,35 @@ def main():
 
         elif app_screen == "game":
             offset_x = shake.get_offset()
-            egg_rect_draw = get_egg_rect(offset_x)
+            egg_draw_sprite, egg_rect_draw, hatch_progress = get_draw_egg_for_frame(offset_x)
+            layout_anchor_rect = get_egg_rect(offset_x)
+            active_environment_bg = environment_backgrounds.get(selected_environment) if selected_environment else None
+            environments_unlocked = evolution_stage == "petawaru"
             draw_game_screen(
                 canvas,
                 canvas_w,
                 canvas_h,
                 font,
+                status_font,
                 scale,
-                status_text,
-                egg_sprite,
+                get_status_text(),
+                egg_draw_sprite,
                 egg_rect_draw,
+                layout_anchor_rect,
                 current_tab,
                 stat_items,
                 environment_items,
                 time_alive_seconds,
                 format_time,
                 lock_image,
+                selected_environment,
+                hidden_revealed,
+                active_environment_bg,
+                environment_backgrounds,
+                environments_unlocked,
             )
+            if hatching_animation_active:
+                draw_hatching_cracks(egg_rect_draw, hatch_progress)
         else:
             draw_extra_stats_page(
                 canvas,
@@ -570,6 +709,18 @@ def main():
             if autosave_timer >= AUTOSAVE_INTERVAL_SECONDS:
                 autosave_timer = 0.0
                 save_active_slot(force=False)
+
+        if app_screen == "game":
+            if selected_environment in {"water", "earth", "air"}:
+                environment_time_seconds[selected_environment] += dt
+            total_visible_env_time = (
+                environment_time_seconds["water"]
+                + environment_time_seconds["earth"]
+                + environment_time_seconds["air"]
+            )
+            if (not hidden_revealed) and total_visible_env_time >= HIDDEN_UNLOCK_THRESHOLD_SECONDS:
+                hidden_revealed = True
+            mark_save_dirty()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -633,6 +784,33 @@ def main():
                         current_tab = "environment"
                         mark_save_dirty()
                     continue
+                if current_tab == "environment":
+                    layout_anchor_rect = get_egg_rect(shake.get_offset())
+                    card_handled = False
+                    environments_unlocked = evolution_stage == "petawaru"
+                    for idx, label in enumerate(environment_items):
+                        env_key = label.lower()
+                        card_rect = get_environment_card_rect(
+                            canvas_w,
+                            canvas_h,
+                            layout_anchor_rect,
+                            get_canvas_scale(),
+                            idx,
+                        )
+                        if not card_rect.collidepoint(mouse_pos):
+                            continue
+                        card_handled = True
+                        if env_key in {"water", "earth", "air"} and not environments_unlocked:
+                            break
+                        if env_key == "hidden" and not hidden_revealed:
+                            break
+                        if env_key in {"water", "earth", "air", "hidden"}:
+                            if selected_environment != env_key:
+                                selected_environment = env_key
+                                mark_save_dirty()
+                        break
+                    if card_handled:
+                        continue
                 if current_tab == "stats":
                     extra_stats_rect = get_stats_row_rect_for_label(
                         canvas_w,
@@ -650,8 +828,34 @@ def main():
                     local_x = mouse_pos[0] - egg_hit_rect.left
                     local_y = mouse_pos[1] - egg_hit_rect.top
                     if egg_mask.get_at((local_x, local_y)):
+                        if hatching_animation_active:
+                            continue
+
                         shake.trigger()
-                        status_text = "Shaking"
+                        if evolution_stage == "petawaru":
+                            status_flash_text = "Petting"
+                            status_flash_timer = 0.35
+                        else:
+                            status_flash_text = "Shaking"
+                            status_flash_timer = 0.25
+
+                        if evolution_stage in {"dormant", "cracked"}:
+                            evolution_click_progress += 1
+                            mark_save_dirty()
+                            if evolution_stage == "dormant" and evolution_click_progress >= 2:
+                                evolution_stage = "cracked"
+                                evolution_click_progress = 0
+                                status_flash_text = ""
+                                status_flash_timer = 0.0
+                                mark_save_dirty()
+                            elif evolution_stage == "cracked" and evolution_click_progress >= 2:
+                                evolution_stage = "hatching"
+                                evolution_click_progress = 0
+                                hatching_animation_active = True
+                                hatching_animation_timer = 0.0
+                                status_flash_text = ""
+                                status_flash_timer = 0.0
+                                mark_save_dirty()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 if app_screen == "extra_stats":
                     app_screen = "game"
@@ -686,10 +890,20 @@ def main():
         if app_screen == "game":
             prev_active = shake.active
             shake.update(dt)
-            # if shake stopped this frame, revert status
-            if prev_active and not shake.active:
-                status_text = "Dormant"
-                mark_save_dirty()
+            if status_flash_timer > 0.0:
+                status_flash_timer = max(0.0, status_flash_timer - dt)
+                if status_flash_timer <= 0.0:
+                    status_flash_text = ""
+
+            if hatching_animation_active:
+                hatching_animation_timer += dt
+                if hatching_animation_timer >= hatching_animation_duration:
+                    hatching_animation_active = False
+                    hatching_animation_timer = 0.0
+                    evolution_stage = "petawaru"
+                    egg_image = petawaru_image if petawaru_image is not None else base_egg_image
+                    rebuild_egg_sprite()
+                    mark_save_dirty()
 
         if window_visible:
             draw_frame()
