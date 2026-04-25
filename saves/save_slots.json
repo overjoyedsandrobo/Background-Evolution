@@ -2,14 +2,14 @@
   {
     "used": true,
     "current_tab": "environment",
-    "time_alive_seconds": 283.9149999999952,
+    "time_alive_seconds": 70.42200000000025,
     "evolution_stage": "petawaru",
     "evolution_click_progress": 0,
-    "selected_environment": "water",
+    "selected_environment": "hidden",
     "environment_time_seconds": {
-      "water": 15.70200000000005,
-      "earth": 48.03100000000009,
-      "air": 0.0
+      "water": 5.383999999999986,
+      "earth": 5.489999999999981,
+      "air": 50.375999999999244
     },
     "hidden_revealed": true
   },

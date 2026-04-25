@@ -392,6 +392,9 @@ def main():
     selected_environment = None
     environment_time_seconds = {"water": 0.0, "earth": 0.0, "air": 0.0}
     hidden_revealed = False
+    pause_menu_open = False
+    reset_confirm_open = False
+    quit_confirm_open = False
     app_screen = "start_menu"
     save_slots = load_save_slots(NUM_SAVE_SLOTS)
     active_slot_index: Optional[int] = None
@@ -411,6 +414,64 @@ def main():
         if active_slot_index is None:
             return
         save_dirty = True
+
+    def get_pause_menu_rect():
+        menu_w = int(canvas_w * 0.68)
+        menu_h = int(canvas_h * 0.56)
+        return pygame.Rect((canvas_w - menu_w) // 2, (canvas_h - menu_h) // 2, menu_w, menu_h)
+
+    def get_pause_menu_option_rects():
+        menu_rect = get_pause_menu_rect()
+        labels = ["Settings", "Your monster", "Reset", "Exit to start menu", "Quit"]
+        row_h = max(1, menu_rect.height // len(labels))
+        rects = {}
+        for idx, label in enumerate(labels):
+            rects[label] = pygame.Rect(menu_rect.x, menu_rect.y + idx * row_h, menu_rect.width, row_h)
+        return menu_rect, rects
+
+    def get_quit_confirm_rects():
+        menu_rect = get_pause_menu_rect()
+        confirm_w = int(menu_rect.width * 0.8)
+        confirm_h = int(menu_rect.height * 0.34)
+        confirm_rect = pygame.Rect(
+            menu_rect.centerx - confirm_w // 2,
+            menu_rect.centery - confirm_h // 2,
+            confirm_w,
+            confirm_h,
+        )
+        yes_rect = pygame.Rect(
+            confirm_rect.x + int(confirm_rect.width * 0.12),
+            confirm_rect.y + int(confirm_rect.height * 0.62),
+            int(confirm_rect.width * 0.32),
+            int(confirm_rect.height * 0.24),
+        )
+        no_rect = pygame.Rect(
+            confirm_rect.right - int(confirm_rect.width * 0.12) - int(confirm_rect.width * 0.32),
+            yes_rect.y,
+            int(confirm_rect.width * 0.32),
+            yes_rect.height,
+        )
+        return confirm_rect, yes_rect, no_rect
+
+    def reset_current_progress():
+        nonlocal current_tab, time_alive_seconds, evolution_stage, evolution_click_progress
+        nonlocal status_flash_text, status_flash_timer
+        nonlocal hatching_animation_active, hatching_animation_timer, egg_image
+        nonlocal selected_environment, environment_time_seconds, hidden_revealed
+        current_tab = "stats"
+        time_alive_seconds = 0.0
+        evolution_stage = "dormant"
+        evolution_click_progress = 0
+        status_flash_text = ""
+        status_flash_timer = 0.0
+        hatching_animation_active = False
+        hatching_animation_timer = 0.0
+        selected_environment = None
+        environment_time_seconds = {"water": 0.0, "earth": 0.0, "air": 0.0}
+        hidden_revealed = False
+        egg_image = base_egg_image
+        rebuild_egg_sprite()
+        mark_save_dirty()
 
     def get_stage_label():
         if evolution_stage == "cracked":
@@ -456,6 +517,7 @@ def main():
         nonlocal evolution_stage, evolution_click_progress, status_flash_text, status_flash_timer
         nonlocal hatching_animation_active, hatching_animation_timer, egg_image
         nonlocal selected_environment, environment_time_seconds, hidden_revealed
+        nonlocal pause_menu_open, reset_confirm_open, quit_confirm_open
         active_slot_index = slot_index
         slot = save_slots[slot_index]
 
@@ -503,6 +565,9 @@ def main():
         status_flash_timer = 0.0
         hatching_animation_active = False
         hatching_animation_timer = 0.0
+        pause_menu_open = False
+        reset_confirm_open = False
+        quit_confirm_open = False
         egg_image = petawaru_image if evolution_stage == "petawaru" else base_egg_image
         rebuild_egg_sprite()
         app_screen = "game"
@@ -681,6 +746,38 @@ def main():
             )
             if hatching_animation_active:
                 draw_hatching_cracks(egg_rect_draw, hatch_progress)
+            if pause_menu_open:
+                overlay = pygame.Surface((canvas_w, canvas_h), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 150))
+                canvas.blit(overlay, (0, 0))
+
+                menu_rect, option_rects = get_pause_menu_option_rects()
+                pygame.draw.rect(canvas, (34, 38, 44), menu_rect, border_radius=10)
+                pygame.draw.rect(canvas, (108, 118, 132), menu_rect, 2, border_radius=10)
+
+                for label, rect in option_rects.items():
+                    if label != "Settings":
+                        pygame.draw.line(canvas, (70, 78, 90), (rect.x + 10, rect.y), (rect.right - 10, rect.y), 1)
+                    text = font.render(label, True, (232, 236, 242))
+                    canvas.blit(text, text.get_rect(center=rect.center))
+
+                if reset_confirm_open or quit_confirm_open:
+                    confirm_rect, yes_rect, no_rect = get_quit_confirm_rects()
+                    pygame.draw.rect(canvas, (26, 30, 36), confirm_rect, border_radius=8)
+                    pygame.draw.rect(canvas, (130, 140, 152), confirm_rect, 2, border_radius=8)
+
+                    if reset_confirm_open:
+                        question_text = "Are you sure you want to reset?"
+                    else:
+                        question_text = "Are you sure you want to quit?"
+                    question = font.render(question_text, True, (236, 240, 245))
+                    canvas.blit(question, question.get_rect(center=(confirm_rect.centerx, confirm_rect.y + int(confirm_rect.height * 0.3))))
+                    pygame.draw.rect(canvas, (124, 56, 56), yes_rect, border_radius=6)
+                    pygame.draw.rect(canvas, (70, 110, 76), no_rect, border_radius=6)
+                    yes_text = font.render("Yes", True, (245, 235, 235))
+                    no_text = font.render("No", True, (230, 245, 232))
+                    canvas.blit(yes_text, yes_text.get_rect(center=yes_rect.center))
+                    canvas.blit(no_text, no_text.get_rect(center=no_rect.center))
         else:
             draw_extra_stats_page(
                 canvas,
@@ -702,7 +799,7 @@ def main():
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
-        if app_screen in ("game", "extra_stats"):
+        if app_screen in ("game", "extra_stats") and not pause_menu_open:
             time_alive_seconds += dt
             mark_save_dirty()
             autosave_timer += dt
@@ -710,7 +807,7 @@ def main():
                 autosave_timer = 0.0
                 save_active_slot(force=False)
 
-        if app_screen == "game":
+        if app_screen == "game" and not pause_menu_open:
             if selected_environment in {"water", "earth", "air"}:
                 environment_time_seconds[selected_environment] += dt
             total_visible_env_time = (
@@ -766,6 +863,47 @@ def main():
                     enter_slot(selected_slot, force_new=False)
                     continue
                 if app_screen == "extra_stats":
+                    continue
+                if app_screen == "game" and pause_menu_open:
+                    if reset_confirm_open or quit_confirm_open:
+                        _, yes_rect, no_rect = get_quit_confirm_rects()
+                        if yes_rect.collidepoint(mouse_pos):
+                            if reset_confirm_open:
+                                reset_current_progress()
+                                save_active_slot(force=True)
+                                pause_menu_open = False
+                                reset_confirm_open = False
+                            else:
+                                save_active_slot(force=True)
+                                if tray_icon is not None:
+                                    try:
+                                        tray_icon.stop()
+                                    except Exception:
+                                        pass
+                                running = False
+                            continue
+                        if no_rect.collidepoint(mouse_pos):
+                            reset_confirm_open = False
+                            quit_confirm_open = False
+                            continue
+                        continue
+
+                    _, option_rects = get_pause_menu_option_rects()
+                    if option_rects["Exit to start menu"].collidepoint(mouse_pos):
+                        save_active_slot(force=True)
+                        active_slot_index = None
+                        app_screen = "start_menu"
+                        pause_menu_open = False
+                        continue
+                    if option_rects["Reset"].collidepoint(mouse_pos):
+                        reset_confirm_open = True
+                        quit_confirm_open = False
+                        continue
+                    if option_rects["Quit"].collidepoint(mouse_pos):
+                        reset_confirm_open = False
+                        quit_confirm_open = True
+                        continue
+                    # Settings / Your monster placeholders for now.
                     continue
 
                 stats_tab_rect, environment_tab_rect, _ = get_ui_layout(
@@ -860,9 +998,12 @@ def main():
                 if app_screen == "extra_stats":
                     app_screen = "game"
                 elif app_screen == "game":
-                    save_active_slot(force=True)
-                    app_screen = "save_select"
-                    active_slot_index = None
+                    if reset_confirm_open:
+                        reset_confirm_open = False
+                    elif quit_confirm_open:
+                        quit_confirm_open = False
+                    else:
+                        pause_menu_open = not pause_menu_open
                 elif app_screen == "save_select":
                     app_screen = "start_menu"
             elif event.type == pygame.USEREVENT:
