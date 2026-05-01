@@ -1,0 +1,802 @@
+{
+  "storm": {
+    "parents": [
+      "air",
+      "earth",
+      "water"
+    ],
+    "ratios": [
+      0.5601,
+      0.067,
+      0.3728
+    ],
+    "generation": 1,
+    "cosine_sim": 0.7135,
+    "names_as": "shore",
+    "exact_hit": false
+  },
+  "cave": {
+    "parents": [
+      "earth",
+      "earth",
+      "water"
+    ],
+    "ratios": [
+      0.0,
+      0.9462,
+      0.0538
+    ],
+    "generation": 1,
+    "cosine_sim": 0.9346,
+    "names_as": "cave",
+    "exact_hit": true
+  },
+  "ocean": {
+    "parents": [
+      "air",
+      "earth",
+      "water"
+    ],
+    "ratios": [
+      0.2214,
+      0.0979,
+      0.6807
+    ],
+    "generation": 1,
+    "cosine_sim": 0.8699,
+    "names_as": "swamp",
+    "exact_hit": false
+  },
+  "desert": {
+    "parents": [
+      "air",
+      "earth",
+      "earth"
+    ],
+    "ratios": [
+      0.4239,
+      0.288,
+      0.288
+    ],
+    "generation": 1,
+    "cosine_sim": 0.9012,
+    "names_as": "desert",
+    "exact_hit": true
+  },
+  "forest": {
+    "parents": [
+      "air",
+      "earth",
+      "water"
+    ],
+    "ratios": [
+      0.2061,
+      0.2873,
+      0.5065
+    ],
+    "generation": 1,
+    "cosine_sim": 0.8763,
+    "names_as": "swamp",
+    "exact_hit": false
+  },
+  "tundra": {
+    "parents": [
+      "air",
+      "earth",
+      "water"
+    ],
+    "ratios": [
+      0.4169,
+      0.4742,
+      0.1089
+    ],
+    "generation": 1,
+    "cosine_sim": 0.8068,
+    "names_as": "desert",
+    "exact_hit": false
+  },
+  "swamp": {
+    "parents": [
+      "earth",
+      "water",
+      "water"
+    ],
+    "ratios": [
+      0.235,
+      0.3825,
+      0.3825
+    ],
+    "generation": 1,
+    "cosine_sim": 0.9638,
+    "names_as": "swamp",
+    "exact_hit": true
+  },
+  "peak": {
+    "parents": [
+      "air",
+      "air",
+      "earth"
+    ],
+    "ratios": [
+      0.2726,
+      0.3577,
+      0.3697
+    ],
+    "generation": 1,
+    "cosine_sim": 0.7973,
+    "names_as": "desert",
+    "exact_hit": false
+  },
+  "shore": {
+    "parents": [
+      "air",
+      "earth",
+      "water"
+    ],
+    "ratios": [
+      0.4514,
+      0.2644,
+      0.2842
+    ],
+    "generation": 1,
+    "cosine_sim": 0.8887,
+    "names_as": "shore",
+    "exact_hit": true
+  },
+  "sky": {
+    "parents": [
+      "air",
+      "air",
+      "air"
+    ],
+    "ratios": [
+      0.0,
+      0.5,
+      0.5
+    ],
+    "generation": 1,
+    "cosine_sim": 0.9988,
+    "names_as": "sky",
+    "exact_hit": true
+  },
+  "volcano": {
+    "parents": [
+      "storm",
+      "cave",
+      "desert"
+    ],
+    "ratios": [
+      0.2876,
+      0.3324,
+      0.38
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9435,
+    "names_as": "volcano",
+    "exact_hit": true
+  },
+  "abyss": {
+    "parents": [
+      "cave",
+      "ocean",
+      "swamp"
+    ],
+    "ratios": [
+      0.436,
+      0.421,
+      0.143
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9215,
+    "names_as": "biolume",
+    "exact_hit": false
+  },
+  "glacier": {
+    "parents": [
+      "cave",
+      "tundra",
+      "shore"
+    ],
+    "ratios": [
+      0.2427,
+      0.4645,
+      0.2928
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9842,
+    "names_as": "glacier",
+    "exact_hit": true
+  },
+  "badlands": {
+    "parents": [
+      "desert",
+      "swamp",
+      "peak"
+    ],
+    "ratios": [
+      0.4945,
+      0.256,
+      0.2495
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9576,
+    "names_as": "badlands",
+    "exact_hit": true
+  },
+  "tempest": {
+    "parents": [
+      "storm",
+      "storm",
+      "shore"
+    ],
+    "ratios": [
+      0.4321,
+      0.4321,
+      0.1358
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9941,
+    "names_as": "tempest",
+    "exact_hit": true
+  },
+  "jungle": {
+    "parents": [
+      "forest",
+      "swamp",
+      "swamp"
+    ],
+    "ratios": [
+      0.596,
+      0.202,
+      0.202
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9869,
+    "names_as": "jungle",
+    "exact_hit": true
+  },
+  "permafrost": {
+    "parents": [
+      "cave",
+      "tundra",
+      "cave"
+    ],
+    "ratios": [
+      0.2039,
+      0.592,
+      0.2041
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9818,
+    "names_as": "permafrost",
+    "exact_hit": true
+  },
+  "biolume": {
+    "parents": [
+      "cave",
+      "ocean",
+      "swamp"
+    ],
+    "ratios": [
+      0.1414,
+      0.6313,
+      0.2273
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9664,
+    "names_as": "biolume",
+    "exact_hit": true
+  },
+  "ashfield": {
+    "parents": [
+      "cave",
+      "swamp",
+      "sky"
+    ],
+    "ratios": [
+      0.4604,
+      0.2765,
+      0.2631
+    ],
+    "generation": 2,
+    "cosine_sim": 0.8968,
+    "names_as": "volcano",
+    "exact_hit": false
+  },
+  "maelstrom": {
+    "parents": [
+      "storm",
+      "storm",
+      "cave"
+    ],
+    "ratios": [
+      0.4111,
+      0.4111,
+      0.1778
+    ],
+    "generation": 2,
+    "cosine_sim": 0.9924,
+    "names_as": "maelstrom",
+    "exact_hit": true
+  },
+  "underworld": {
+    "parents": [
+      "volcano",
+      "biolume",
+      "ashfield"
+    ],
+    "ratios": [
+      0.276,
+      0.3279,
+      0.3961
+    ],
+    "generation": 3,
+    "cosine_sim": 0.8804,
+    "names_as": "titan_forge",
+    "exact_hit": false
+  },
+  "sky_citadel": {
+    "parents": [
+      "glacier",
+      "badlands",
+      "biolume"
+    ],
+    "ratios": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "generation": 3,
+    "cosine_sim": 0.6895,
+    "names_as": "frost_citadel",
+    "exact_hit": false
+  },
+  "fae_realm": {
+    "parents": [
+      "badlands",
+      "jungle",
+      "biolume"
+    ],
+    "ratios": [
+      0.1847,
+      0.2443,
+      0.571
+    ],
+    "generation": 3,
+    "cosine_sim": 0.8169,
+    "names_as": "verdant_ruin",
+    "exact_hit": false
+  },
+  "sea_of_souls": {
+    "parents": [
+      "biolume",
+      "ashfield",
+      "maelstrom"
+    ],
+    "ratios": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "generation": 3,
+    "cosine_sim": 0.7307,
+    "names_as": "verdant_ruin",
+    "exact_hit": false
+  },
+  "titan_forge": {
+    "parents": [
+      "volcano",
+      "volcano",
+      "permafrost"
+    ],
+    "ratios": [
+      0.4298,
+      0.4298,
+      0.1405
+    ],
+    "generation": 3,
+    "cosine_sim": 0.9574,
+    "names_as": "titan_forge",
+    "exact_hit": true
+  },
+  "sunken_kingdom": {
+    "parents": [
+      "abyss",
+      "biolume",
+      "ashfield"
+    ],
+    "ratios": [
+      0.3339,
+      0.4604,
+      0.2057
+    ],
+    "generation": 3,
+    "cosine_sim": 0.8982,
+    "names_as": "sunken_kingdom",
+    "exact_hit": true
+  },
+  "frost_citadel": {
+    "parents": [
+      "volcano",
+      "volcano",
+      "glacier"
+    ],
+    "ratios": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "generation": 3,
+    "cosine_sim": 0.882,
+    "names_as": "frost_citadel",
+    "exact_hit": true
+  },
+  "storm_throne": {
+    "parents": [
+      "badlands",
+      "biolume",
+      "maelstrom"
+    ],
+    "ratios": [
+      0.2639,
+      0.1926,
+      0.5435
+    ],
+    "generation": 3,
+    "cosine_sim": 0.8547,
+    "names_as": "storm_throne",
+    "exact_hit": true
+  },
+  "verdant_ruin": {
+    "parents": [
+      "badlands",
+      "biolume",
+      "jungle"
+    ],
+    "ratios": [
+      0.2354,
+      0.3512,
+      0.4135
+    ],
+    "generation": 3,
+    "cosine_sim": 0.9403,
+    "names_as": "verdant_ruin",
+    "exact_hit": true
+  },
+  "echo_deep": {
+    "parents": [
+      "permafrost",
+      "biolume",
+      "ashfield"
+    ],
+    "ratios": [
+      0.3424,
+      0.3518,
+      0.3058
+    ],
+    "generation": 3,
+    "cosine_sim": 0.7607,
+    "names_as": "verdant_ruin",
+    "exact_hit": false
+  },
+  "black_hole": {
+    "parents": [
+      "underworld",
+      "underworld",
+      "echo_deep"
+    ],
+    "ratios": [
+      0.2343,
+      0.2343,
+      0.5313
+    ],
+    "generation": 4,
+    "cosine_sim": 0.8885,
+    "names_as": "black_hole",
+    "exact_hit": true
+  },
+  "sun": {
+    "parents": [
+      "sky_citadel",
+      "titan_forge",
+      "storm_throne"
+    ],
+    "ratios": [
+      0.1087,
+      0.8913,
+      0.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.7217,
+    "names_as": "asteroid_field",
+    "exact_hit": false
+  },
+  "nebula": {
+    "parents": [
+      "sky_citadel",
+      "titan_forge",
+      "storm_throne"
+    ],
+    "ratios": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.7087,
+    "names_as": "asteroid_field",
+    "exact_hit": false
+  },
+  "moon": {
+    "parents": [
+      "sky_citadel",
+      "titan_forge",
+      "frost_citadel"
+    ],
+    "ratios": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.8249,
+    "names_as": "moon",
+    "exact_hit": true
+  },
+  "void": {
+    "parents": [
+      "sky_citadel",
+      "sea_of_souls",
+      "sea_of_souls"
+    ],
+    "ratios": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.5284,
+    "names_as": "sea_of_souls",
+    "exact_hit": false
+  },
+  "pulsar": {
+    "parents": [
+      "underworld",
+      "titan_forge",
+      "storm_throne"
+    ],
+    "ratios": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.7605,
+    "names_as": "wormhole",
+    "exact_hit": false
+  },
+  "asteroid_field": {
+    "parents": [
+      "sky_citadel",
+      "sea_of_souls",
+      "titan_forge"
+    ],
+    "ratios": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.7884,
+    "names_as": "asteroid_field",
+    "exact_hit": true
+  },
+  "star_cluster": {
+    "parents": [
+      "sky_citadel",
+      "titan_forge",
+      "storm_throne"
+    ],
+    "ratios": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.6843,
+    "names_as": "asteroid_field",
+    "exact_hit": false
+  },
+  "wormhole": {
+    "parents": [
+      "sea_of_souls",
+      "titan_forge",
+      "storm_throne"
+    ],
+    "ratios": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.8329,
+    "names_as": "wormhole",
+    "exact_hit": true
+  },
+  "dark_matter": {
+    "parents": [
+      "sky_citadel",
+      "sea_of_souls",
+      "echo_deep"
+    ],
+    "ratios": [
+      0.0,
+      1.0,
+      0.0
+    ],
+    "generation": 4,
+    "cosine_sim": 0.5651,
+    "names_as": "sea_of_souls",
+    "exact_hit": false
+  },
+  "heaven": {
+    "parents": [
+      "nebula",
+      "moon",
+      "dark_matter"
+    ],
+    "ratios": [
+      0.4731,
+      0.3254,
+      0.2015
+    ],
+    "generation": 5,
+    "cosine_sim": 0.7409,
+    "names_as": "astral_sea",
+    "exact_hit": false
+  },
+  "hell": {
+    "parents": [
+      "black_hole",
+      "sun",
+      "void"
+    ],
+    "ratios": [
+      0.5049,
+      0.3113,
+      0.1838
+    ],
+    "generation": 5,
+    "cosine_sim": 0.8488,
+    "names_as": "chaos_realm",
+    "exact_hit": false
+  },
+  "olympus": {
+    "parents": [
+      "nebula",
+      "moon",
+      "wormhole"
+    ],
+    "ratios": [
+      0.3223,
+      0.3401,
+      0.3375
+    ],
+    "generation": 5,
+    "cosine_sim": 0.8559,
+    "names_as": "astral_sea",
+    "exact_hit": false
+  },
+  "the_between": {
+    "parents": [
+      "void",
+      "asteroid_field",
+      "wormhole"
+    ],
+    "ratios": [
+      0.3094,
+      0.3209,
+      0.3697
+    ],
+    "generation": 5,
+    "cosine_sim": 0.7856,
+    "names_as": "chaos_realm",
+    "exact_hit": false
+  },
+  "astral_sea": {
+    "parents": [
+      "nebula",
+      "moon",
+      "dark_matter"
+    ],
+    "ratios": [
+      0.4937,
+      0.2245,
+      0.2819
+    ],
+    "generation": 5,
+    "cosine_sim": 0.8672,
+    "names_as": "astral_sea",
+    "exact_hit": true
+  },
+  "chaos_realm": {
+    "parents": [
+      "black_hole",
+      "sun",
+      "wormhole"
+    ],
+    "ratios": [
+      0.294,
+      0.2108,
+      0.4953
+    ],
+    "generation": 5,
+    "cosine_sim": 0.8821,
+    "names_as": "chaos_realm",
+    "exact_hit": true
+  },
+  "creation": {
+    "parents": [
+      "black_hole",
+      "sun",
+      "pulsar"
+    ],
+    "ratios": [
+      0.2705,
+      0.3834,
+      0.3461
+    ],
+    "generation": 5,
+    "cosine_sim": 0.8459,
+    "names_as": "chaos_realm",
+    "exact_hit": false
+  },
+  "purgatory": {
+    "parents": [
+      "black_hole",
+      "moon",
+      "wormhole"
+    ],
+    "ratios": [
+      0.1682,
+      0.5314,
+      0.3005
+    ],
+    "generation": 5,
+    "cosine_sim": 0.8229,
+    "names_as": "purgatory",
+    "exact_hit": true
+  },
+  "elysium": {
+    "parents": [
+      "moon",
+      "star_cluster",
+      "wormhole"
+    ],
+    "ratios": [
+      0.4344,
+      0.2442,
+      0.3215
+    ],
+    "generation": 5,
+    "cosine_sim": 0.6842,
+    "names_as": "astral_sea",
+    "exact_hit": false
+  },
+  "nirvana": {
+    "parents": [
+      "nebula",
+      "moon",
+      "dark_matter"
+    ],
+    "ratios": [
+      0.4027,
+      0.3075,
+      0.2898
+    ],
+    "generation": 5,
+    "cosine_sim": 0.7374,
+    "names_as": "astral_sea",
+    "exact_hit": false
+  }
+}

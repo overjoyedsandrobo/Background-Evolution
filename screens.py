@@ -128,7 +128,7 @@ def draw_game_screen(
     layout_anchor_rect,
     current_tab,
     stat_items,
-    environment_items,
+    environment_slot_keys,
     time_alive_seconds,
     format_time,
     lock_image,
@@ -137,6 +137,8 @@ def draw_game_screen(
     environment_bg_surface,
     environment_card_backgrounds,
     environments_unlocked,
+    hidden_environment_name,
+    environment_ratios,
 ):
     if environment_bg_surface is not None:
         bg_scaled = pygame.transform.smoothscale(environment_bg_surface, (canvas_w, canvas_h))
@@ -191,12 +193,11 @@ def draw_game_screen(
             canvas.blit(label_surf, label_surf.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery)))
             canvas.blit(value_surf, value_surf.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)))
     else:
-        for idx, label in enumerate(environment_items):
-            env_key = label.lower()
+        for idx, env_key in enumerate(environment_slot_keys):
+            display_label = env_key.capitalize()
             card = get_environment_card_rect(canvas_w, canvas_h, layout_anchor_rect, canvas_scale, idx)
-            is_hidden = env_key == "hidden"
-            is_base_environment = env_key in {"water", "earth", "air"}
-            is_locked = (is_base_environment and (not environments_unlocked)) or (is_hidden and (not hidden_revealed))
+            is_base_environment = env_key in {"water", "earth", "air", "fire"}
+            is_locked = is_base_environment and (not environments_unlocked)
             is_selected = (env_key == selected_environment)
 
             pygame.draw.rect(canvas, (95, 95, 95), card)
@@ -214,7 +215,7 @@ def draw_game_screen(
                 canvas.blit(overlay, card.topleft)
             if is_locked:
                 draw_lock_on_card(canvas, lock_image, card)
-            label_surf = font.render(label, True, (240, 240, 240))
+            label_surf = font.render(display_label, True, (240, 240, 240))
             canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * canvas_scale))))
             if is_locked:
                 locked_surf = font.render("Locked", True, (70, 70, 70))
@@ -227,6 +228,18 @@ def draw_game_screen(
         divider_y = page_rect.y + (page_rect.height // 2)
         pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
         pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
+
+        # Ratio indicator for the next generated environment.
+        if environment_ratios:
+            ratio_items = sorted(environment_ratios.items(), key=lambda kv: -kv[1])
+            ratio_text = " | ".join(f"{name}: {value * 100:.0f}%" for name, value in ratio_items)
+            ratio_surf = font.render(f"Mix: {ratio_text}", True, (236, 242, 248))
+            bar_h = int(24 * canvas_scale)
+            bar_rect = pygame.Rect(page_rect.x + 2, page_rect.bottom - bar_h - 2, page_rect.width - 4, bar_h)
+            bar_overlay = pygame.Surface((bar_rect.width, bar_rect.height), pygame.SRCALPHA)
+            bar_overlay.fill((10, 14, 18, 170))
+            canvas.blit(bar_overlay, bar_rect.topleft)
+            canvas.blit(ratio_surf, ratio_surf.get_rect(center=bar_rect.center))
 
     return stats_tab_rect, environment_tab_rect
 

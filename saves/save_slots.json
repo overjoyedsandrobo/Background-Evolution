@@ -2,43 +2,74 @@
   {
     "used": true,
     "current_tab": "environment",
-    "time_alive_seconds": 70.42200000000025,
+    "time_alive_seconds": 59.58800000000163,
     "evolution_stage": "petawaru",
     "evolution_click_progress": 0,
-    "selected_environment": "hidden",
-    "environment_time_seconds": {
-      "water": 5.383999999999986,
-      "earth": 5.489999999999981,
-      "air": 50.375999999999244
-    },
-    "hidden_revealed": true
-  },
-  {
-    "used": true,
-    "current_tab": "environment",
-    "time_alive_seconds": 33.32400000000027,
-    "evolution_stage": "cracked",
-    "evolution_click_progress": 1,
     "selected_environment": null,
     "environment_time_seconds": {
-      "water": 3.217999999999996,
-      "earth": 0.9860000000000005,
-      "air": 0.6110000000000002
+      "water": 0.0,
+      "earth": 0.0,
+      "air": 0.0,
+      "forest": 0.0
     },
-    "hidden_revealed": false
+    "hidden_revealed": false,
+    "hidden_environment_name": null,
+    "hidden_cycle_index": 2,
+    "hidden_slot_index": 3,
+    "environment_slot_keys": [
+      "water",
+      "earth",
+      "air",
+      "forest"
+    ],
+    "awaiting_hidden_relock_choice": false
   },
   {
     "used": true,
-    "current_tab": "environment",
-    "time_alive_seconds": 36.80899999999978,
-    "evolution_stage": "petawaru",
+    "current_tab": "stats",
+    "time_alive_seconds": 0.8410000000000006,
+    "evolution_stage": "dormant",
     "evolution_click_progress": 0,
-    "selected_environment": "water",
+    "selected_environment": null,
     "environment_time_seconds": {
-      "water": 15.930000000000076,
-      "earth": 2.0079999999999987,
-      "air": 16.357999999999944
+      "water": 0.0,
+      "earth": 0.0,
+      "air": 0.0
     },
-    "hidden_revealed": false
+    "hidden_revealed": false,
+    "hidden_environment_name": null,
+    "hidden_cycle_index": 1,
+    "hidden_slot_index": 3,
+    "environment_slot_keys": [
+      "water",
+      "earth",
+      "air",
+      "fire"
+    ],
+    "awaiting_hidden_relock_choice": false
+  },
+  {
+    "used": true,
+    "current_tab": "stats",
+    "time_alive_seconds": 0.7310000000000005,
+    "evolution_stage": "dormant",
+    "evolution_click_progress": 0,
+    "selected_environment": null,
+    "environment_time_seconds": {
+      "water": 0.0,
+      "earth": 0.0,
+      "air": 0.0
+    },
+    "hidden_revealed": false,
+    "hidden_environment_name": null,
+    "hidden_cycle_index": 1,
+    "hidden_slot_index": 3,
+    "environment_slot_keys": [
+      "water",
+      "earth",
+      "air",
+      "fire"
+    ],
+    "awaiting_hidden_relock_choice": false
   }
 ]

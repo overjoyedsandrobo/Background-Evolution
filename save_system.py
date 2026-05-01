@@ -2,6 +2,7 @@ import json
 import os
 
 DEFAULT_SAVE_FILE_PATH = os.path.join("saves", "save_slots.json")
+DEFAULT_ENVIRONMENT_KEYS = ["water", "earth", "air", "fire"]
 
 
 def new_slot_state():
@@ -16,8 +17,14 @@ def new_slot_state():
             "water": 0.0,
             "earth": 0.0,
             "air": 0.0,
+            "fire": 0.0,
         },
         "hidden_revealed": False,
+        "hidden_environment_name": None,
+        "hidden_cycle_index": 1,
+        "hidden_slot_index": 3,
+        "environment_slot_keys": list(DEFAULT_ENVIRONMENT_KEYS),
+        "awaiting_hidden_relock_choice": False,
     }
 
 
@@ -40,13 +47,18 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
             env_times = candidate.get("environment_time_seconds", {})
             if not isinstance(env_times, dict):
                 env_times = {}
+            sanitized_env_times = {}
+            for k, v in env_times.items():
+                key = str(k).lower()
+                try:
+                    sanitized_env_times[key] = max(0.0, float(v))
+                except Exception:
+                    continue
             selected_raw = candidate.get("selected_environment", None)
             if selected_raw is None:
                 selected_environment = None
             else:
                 selected_environment = str(selected_raw).lower()
-                if selected_environment not in {"water", "earth", "air", "hidden"}:
-                    selected_environment = None
             saved_evolution_stage = str(candidate.get("evolution_stage", "")).lower()
             if saved_evolution_stage not in {"dormant", "cracked", "hatching", "petawaru"}:
                 # Backward compatibility for saves that used `monster_stage`.
@@ -67,13 +79,35 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
                 "evolution_stage": saved_evolution_stage,
                 "evolution_click_progress": int(candidate.get("evolution_click_progress", 0)),
                 "selected_environment": selected_environment,
-                "environment_time_seconds": {
-                    "water": max(0.0, float(env_times.get("water", 0.0))),
-                    "earth": max(0.0, float(env_times.get("earth", 0.0))),
-                    "air": max(0.0, float(env_times.get("air", 0.0))),
-                },
+                "environment_time_seconds": sanitized_env_times,
                 "hidden_revealed": bool(candidate.get("hidden_revealed", False)),
+                "hidden_environment_name": candidate.get("hidden_environment_name", None),
+                "hidden_cycle_index": int(candidate.get("hidden_cycle_index", 1)),
+                "hidden_slot_index": int(candidate.get("hidden_slot_index", 3)),
+                "environment_slot_keys": candidate.get("environment_slot_keys", DEFAULT_ENVIRONMENT_KEYS),
+                "awaiting_hidden_relock_choice": bool(candidate.get("awaiting_hidden_relock_choice", False)),
             })
+            if merged["hidden_cycle_index"] < 1:
+                merged["hidden_cycle_index"] = 1
+            if merged["hidden_slot_index"] not in (0, 1, 2, 3):
+                merged["hidden_slot_index"] = 3
+            keys = merged["environment_slot_keys"]
+            if not isinstance(keys, list) or len(keys) != 4:
+                merged["environment_slot_keys"] = list(DEFAULT_ENVIRONMENT_KEYS)
+            else:
+                norm_keys = [str(k).lower() for k in keys]
+                merged["environment_slot_keys"] = [
+                    "fire" if key == "hidden" else key
+                    for key in norm_keys
+                ]
+            if len(set(merged["environment_slot_keys"])) != 4:
+                deduped_keys = []
+                for key in merged["environment_slot_keys"] + DEFAULT_ENVIRONMENT_KEYS:
+                    if key and key not in deduped_keys:
+                        deduped_keys.append(key)
+                    if len(deduped_keys) == 4:
+                        break
+                merged["environment_slot_keys"] = deduped_keys
             if merged["evolution_stage"] not in {"dormant", "cracked", "hatching", "petawaru"}:
                 merged["evolution_stage"] = "dormant"
             merged["evolution_click_progress"] = max(0, min(2, merged["evolution_click_progress"]))
