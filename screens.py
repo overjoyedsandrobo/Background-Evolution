@@ -76,6 +76,15 @@ def draw_lock_on_card(canvas, lock_image, card_rect):
     canvas.blit(lock_scaled, lock_rect)
 
 
+def format_compact_duration(total_seconds):
+    seconds = max(0.0, float(total_seconds))
+    if seconds < 60.0:
+        return f"{int(seconds)}s"
+    if seconds < 3600.0:
+        return f"{seconds / 60.0:.1f}m"
+    return f"{int(seconds // 3600)}h"
+
+
 def draw_start_menu(canvas, canvas_w, canvas_h, font, start_bg_image):
     if start_bg_image is not None:
         bg_scaled = pygame.transform.smoothscale(start_bg_image, (canvas_w, canvas_h))
@@ -83,8 +92,10 @@ def draw_start_menu(canvas, canvas_w, canvas_h, font, start_bg_image):
     else:
         canvas.fill((22, 30, 44))
 
-    title_surf = font.render("Background Evolution", True, (240, 240, 245))
-    canvas.blit(title_surf, title_surf.get_rect(center=(canvas_w // 2, int(canvas_h * 0.18))))
+    title_size = max(font.get_height() + 10, int(canvas_h * 0.06))
+    title_font = pygame.font.SysFont(None, title_size)
+    title_surf = title_font.render("Background Evolution", True, (240, 240, 245))
+    canvas.blit(title_surf, title_surf.get_rect(center=(canvas_w // 2, int(canvas_h * 0.12))))
 
     start_btn = get_start_button_rect(canvas_w, canvas_h)
     pygame.draw.rect(canvas, (28, 125, 92), start_btn, border_radius=14)
@@ -104,15 +115,10 @@ def draw_save_select(canvas, canvas_w, canvas_h, font, save_slots, num_save_slot
         slot_title = font.render(f"Save Slot {idx + 1}", True, (238, 238, 240))
         canvas.blit(slot_title, slot_title.get_rect(midleft=(int(20 * canvas_scale), slot_rect.top + int(26 * canvas_scale))))
 
-        status_label = "Continue" if slot.get("used", False) else "New Game"
-        action_color = (180, 225, 190) if slot.get("used", False) else (220, 220, 230)
-        action_surf = font.render(status_label, True, action_color)
-        canvas.blit(action_surf, action_surf.get_rect(midleft=(int(20 * canvas_scale), slot_rect.top + int(58 * canvas_scale))))
-
         if slot.get("used", False):
             details = f"Time {format_time(slot.get('time_alive_seconds', 0.0))}"
             detail_surf = font.render(details, True, (195, 204, 215))
-            canvas.blit(detail_surf, detail_surf.get_rect(midleft=(int(20 * canvas_scale), slot_rect.top + int(90 * canvas_scale))))
+            canvas.blit(detail_surf, detail_surf.get_rect(midleft=(int(20 * canvas_scale), slot_rect.top + int(62 * canvas_scale))))
 
 
 def draw_game_screen(
@@ -139,6 +145,8 @@ def draw_game_screen(
     environments_unlocked,
     hidden_environment_name,
     environment_ratios,
+    environment_total_seconds,
+    environment_threshold_seconds,
 ):
     if environment_bg_surface is not None:
         bg_scaled = pygame.transform.smoothscale(environment_bg_surface, (canvas_w, canvas_h))
@@ -147,6 +155,19 @@ def draw_game_screen(
     status_surf = status_font.render(status_text, True, (220, 220, 220))
     status_rect = status_surf.get_rect(center=(canvas_w // 2, int(36 * canvas_scale)))
     canvas.blit(status_surf, status_rect)
+
+    env_progress_text = f"{format_compact_duration(environment_total_seconds)}/{format_compact_duration(environment_threshold_seconds)}"
+    env_progress_surf = font.render(env_progress_text, True, (236, 242, 248))
+    progress_pad_x = int(7 * canvas_scale)
+    progress_pad_y = int(3 * canvas_scale)
+    progress_rect = env_progress_surf.get_rect()
+    progress_rect.inflate_ip(progress_pad_x * 2, progress_pad_y * 2)
+    progress_rect.topright = (canvas_w - int(6 * canvas_scale), int(6 * canvas_scale))
+    progress_bg = pygame.Surface((progress_rect.width, progress_rect.height), pygame.SRCALPHA)
+    progress_bg.fill((10, 14, 18, 165))
+    canvas.blit(progress_bg, progress_rect.topleft)
+    canvas.blit(env_progress_surf, env_progress_surf.get_rect(center=progress_rect.center))
+
     canvas.blit(egg_sprite, egg_rect_draw)
 
     stats_tab_rect, environment_tab_rect, page_rect = get_ui_layout(canvas_w, canvas_h, layout_anchor_rect, canvas_scale)
@@ -217,29 +238,29 @@ def draw_game_screen(
                 draw_lock_on_card(canvas, lock_image, card)
             label_surf = font.render(display_label, True, (240, 240, 240))
             canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * canvas_scale))))
+            if environment_ratios:
+                percent = f"{environment_ratios.get(env_key, 0.0) * 100:.0f}%"
+                percent_surf = font.render(percent, True, (246, 248, 250))
+                pill_pad_x = int(8 * canvas_scale)
+                pill_pad_y = int(3 * canvas_scale)
+                pill_rect = percent_surf.get_rect()
+                pill_rect.inflate_ip(pill_pad_x * 2, pill_pad_y * 2)
+                pill_rect.midbottom = (card.centerx, card.bottom - int(10 * canvas_scale))
+                pill_bg = pygame.Surface((pill_rect.width, pill_rect.height), pygame.SRCALPHA)
+                pill_bg.fill((10, 14, 18, 175))
+                canvas.blit(pill_bg, pill_rect.topleft)
+                canvas.blit(percent_surf, percent_surf.get_rect(center=pill_rect.center))
             if is_locked:
                 locked_surf = font.render("Locked", True, (70, 70, 70))
-                canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * canvas_scale))))
+                canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(38 * canvas_scale))))
             elif is_selected:
                 selected_surf = font.render("Selected", True, (215, 245, 215))
-                canvas.blit(selected_surf, selected_surf.get_rect(midbottom=(card.centerx, card.bottom - int(10 * canvas_scale))))
+                canvas.blit(selected_surf, selected_surf.get_rect(midbottom=(card.centerx, card.bottom - int(38 * canvas_scale))))
 
         divider_x = page_rect.x + (page_rect.width // 2)
         divider_y = page_rect.y + (page_rect.height // 2)
         pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
         pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
-
-        # Ratio indicator for the next generated environment.
-        if environment_ratios:
-            ratio_items = sorted(environment_ratios.items(), key=lambda kv: -kv[1])
-            ratio_text = " | ".join(f"{name}: {value * 100:.0f}%" for name, value in ratio_items)
-            ratio_surf = font.render(f"Mix: {ratio_text}", True, (236, 242, 248))
-            bar_h = int(24 * canvas_scale)
-            bar_rect = pygame.Rect(page_rect.x + 2, page_rect.bottom - bar_h - 2, page_rect.width - 4, bar_h)
-            bar_overlay = pygame.Surface((bar_rect.width, bar_rect.height), pygame.SRCALPHA)
-            bar_overlay.fill((10, 14, 18, 170))
-            canvas.blit(bar_overlay, bar_rect.topleft)
-            canvas.blit(ratio_surf, ratio_surf.get_rect(center=bar_rect.center))
 
     return stats_tab_rect, environment_tab_rect
 

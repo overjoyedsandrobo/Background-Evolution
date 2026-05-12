@@ -7,7 +7,8 @@ from ctypes import wintypes
 from typing import Optional
 import pygame
 from save_system import load_save_slots, write_save_slots, new_slot_state
-from environment_generator import World
+from environment_generator_v4_full import Environment, World
+from prototypes_v4_fitted import PROTOTYPE_LIBRARY
 from ui_helpers import ShakeAnimation, format_time
 from win32_types import RECT, POINT, MINMAXINFO, MONITORINFO
 from tray_support import start_tray_icon
@@ -34,6 +35,7 @@ HIDDEN_THRESHOLD_K = 0.0037
 HIDDEN_THRESHOLD_P = 0.85
 FIRST_CYCLE_THRESHOLD_SECONDS_TEST = 10.0
 DEFAULT_ENVIRONMENT_KEYS = ["water", "earth", "air", "fire"]
+PROTOTYPES_BY_NAME = {p["name"]: p for p in PROTOTYPE_LIBRARY}
 
 
 # tray support is imported at runtime inside start_tray() to satisfy static analysis
@@ -131,7 +133,7 @@ def main():
     except Exception:
         pass
 
-    pygame.display.set_caption("Egg UI Demo")
+    pygame.display.set_caption("Background Evolution Demo")
     screen = pygame.display.set_mode((WINDOW_W, WINDOW_H), pygame.RESIZABLE)
     lock_image = load_image_with_fallback(lock_path)
     canvas_w = WINDOW_W * RESOLUTION_SCALE
@@ -441,13 +443,32 @@ def main():
     }
     world = World()
 
+    def get_prototype_key(env_name):
+        env_key = str(env_name or "").lower()
+        if env_key in PROTOTYPES_BY_NAME:
+            return env_key
+        base_key, _, suffix = env_key.rpartition("_")
+        if suffix.isdigit() and base_key in PROTOTYPES_BY_NAME:
+            return base_key
+        return None
+
     def ensure_environment_known(env_name):
+        env_name = str(env_name or "").lower()
+        if not env_name:
+            return False
         if env_name in world.environments:
             return True
-        try:
-            world.ensure_recipe_chain(env_name)
-        except Exception:
+        prototype_key = get_prototype_key(env_name)
+        if prototype_key is None:
             return False
+        prototype = PROTOTYPES_BY_NAME[prototype_key]
+        world.environments[env_name] = Environment(
+            name=env_name,
+            weights={prototype_key: 1.0},
+            traits=dict(prototype["traits"]),
+            generation=int(prototype["gen_affinity"]),
+            parents=[],
+        )
         return env_name in world.environments
 
     def mark_save_dirty():
@@ -501,21 +522,22 @@ def main():
         nonlocal hidden_environment_name
         active_keys = get_active_environment_keys()
         normalize_environment_time_seconds()
-        ranked_keys = sorted(
-            active_keys,
-            key=lambda k: max(0.0, float(environment_time_seconds.get(k, 0.0))),
-            reverse=True,
-        )
-        parent_keys = [key for key in ranked_keys if ensure_environment_known(key)][:3]
+        parent_keys = [key for key in active_keys if ensure_environment_known(key)]
         for key in DEFAULT_ENVIRONMENT_KEYS:
-            if len(parent_keys) >= 3:
+            if len(parent_keys) >= 4:
                 break
             if key not in parent_keys and ensure_environment_known(key):
                 parent_keys.append(key)
+        parent_keys = parent_keys[:4]
+        if len(parent_keys) < 4:
+            hidden_environment_name = "fire"
+            ensure_environment_background(hidden_environment_name)
+            mark_save_dirty()
+            return
         times = [max(0.0, float(environment_time_seconds.get(k, 0.0))) for k in parent_keys]
         total = sum(times)
         if total <= 0.0:
-            ratios = [1.0 / 3.0] * len(parent_keys)
+            ratios = [0.25] * 4
         else:
             ratios = [t / total for t in times]
         try:
@@ -885,6 +907,9 @@ def main():
             layout_anchor_rect = get_egg_rect(offset_x)
             active_environment_bg = environment_backgrounds.get(selected_environment) if selected_environment else None
             environments_unlocked = evolution_stage == "petawaru"
+            environment_total_seconds = sum(
+                max(0.0, float(environment_time_seconds.get(k, 0.0))) for k in get_active_environment_keys()
+            )
             draw_game_screen(
                 canvas,
                 canvas_w,
@@ -909,6 +934,8 @@ def main():
                 environments_unlocked,
                 hidden_environment_name,
                 get_environment_ratios(),
+                environment_total_seconds,
+                get_hidden_unlock_threshold_seconds(hidden_cycle_index),
             )
             if hatching_animation_active:
                 draw_hatching_cracks(egg_rect_draw, hatch_progress)
@@ -916,11 +943,31 @@ def main():
                 overlay = pygame.Surface((canvas_w, canvas_h), pygame.SRCALPHA)
                 overlay.fill((0, 0, 0, 130))
                 canvas.blit(overlay, (0, 0))
+
+                pulse = (math.sin(pygame.time.get_ticks() * 0.006) + 1.0) * 0.5
+                hovered_canvas_pos = window_to_canvas(pygame.mouse.get_pos())
+                for idx in range(len(environment_slot_keys)):
+                    if hovered_canvas_pos is None:
+                        break
+                    card_rect = get_environment_card_rect(
+                        canvas_w,
+                        canvas_h,
+                        egg_rect_draw,
+                        scale,
+                        idx,
+                    )
+                    if not card_rect.collidepoint(hovered_canvas_pos):
+                        continue
+                    surface_glow = pygame.Surface((card_rect.width, card_rect.height), pygame.SRCALPHA)
+                    surface_glow.fill((248, 246, 235, int(28 + 42 * pulse)))
+                    canvas.blit(surface_glow, card_rect.topleft)
+
                 pending_name = hidden_environment_name.capitalize() if hidden_environment_name else "New Environment"
-                msg1 = font.render(f"{pending_name} discovered", True, (238, 242, 246))
-                msg2 = font.render("Choose one environment to replace", True, (212, 222, 232))
-                canvas.blit(msg1, msg1.get_rect(center=(canvas_w // 2, int(72 * scale))))
-                canvas.blit(msg2, msg2.get_rect(center=(canvas_w // 2, int(98 * scale))))
+                discovery_font = pygame.font.SysFont(None, max(status_font.get_height(), int(42 * scale)))
+                msg1 = discovery_font.render(f"{pending_name} discovered", True, (255, 245, 218))
+                msg2 = font.render("Choose one environment to replace", True, (232, 236, 242))
+                canvas.blit(msg1, msg1.get_rect(center=(canvas_w // 2, int(68 * scale))))
+                canvas.blit(msg2, msg2.get_rect(center=(canvas_w // 2, int(104 * scale))))
             if pause_menu_open:
                 overlay = pygame.Surface((canvas_w, canvas_h), pygame.SRCALPHA)
                 overlay.fill((0, 0, 0, 150))
@@ -1129,7 +1176,10 @@ def main():
                             awaiting_hidden_relock_choice = False
                             mark_save_dirty()
                             break
-                        if selected_environment != env_key:
+                        if selected_environment == env_key:
+                            selected_environment = None
+                            mark_save_dirty()
+                        else:
                             selected_environment = env_key
                             mark_save_dirty()
                         break

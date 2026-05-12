@@ -2,39 +2,39 @@
   {
     "used": true,
     "current_tab": "environment",
-    "time_alive_seconds": 59.58800000000163,
+    "time_alive_seconds": 111.26200000000097,
     "evolution_stage": "petawaru",
     "evolution_click_progress": 0,
-    "selected_environment": null,
+    "selected_environment": "coral_labyrinth",
     "environment_time_seconds": {
-      "water": 0.0,
-      "earth": 0.0,
+      "sky": 0.0,
       "air": 0.0,
-      "forest": 0.0
+      "coral_labyrinth": 1.5189999999999992
     },
     "hidden_revealed": false,
     "hidden_environment_name": null,
-    "hidden_cycle_index": 2,
+    "hidden_cycle_index": 10,
     "hidden_slot_index": 3,
     "environment_slot_keys": [
-      "water",
-      "earth",
+      "sky",
+      "sky",
       "air",
-      "forest"
+      "coral_labyrinth"
     ],
     "awaiting_hidden_relock_choice": false
   },
   {
     "used": true,
     "current_tab": "stats",
-    "time_alive_seconds": 0.8410000000000006,
+    "time_alive_seconds": 7.163999999999798,
     "evolution_stage": "dormant",
     "evolution_click_progress": 0,
     "selected_environment": null,
     "environment_time_seconds": {
       "water": 0.0,
       "earth": 0.0,
-      "air": 0.0
+      "air": 0.0,
+      "fire": 0.0
     },
     "hidden_revealed": false,
     "hidden_environment_name": null,
@@ -51,14 +51,15 @@
   {
     "used": true,
     "current_tab": "stats",
-    "time_alive_seconds": 0.7310000000000005,
+    "time_alive_seconds": 2.434999999999986,
     "evolution_stage": "dormant",
     "evolution_click_progress": 0,
     "selected_environment": null,
     "environment_time_seconds": {
       "water": 0.0,
       "earth": 0.0,
-      "air": 0.0
+      "air": 0.0,
+      "fire": 0.0
     },
     "hidden_revealed": false,
     "hidden_environment_name": null,
