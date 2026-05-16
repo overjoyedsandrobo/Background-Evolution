@@ -35,6 +35,7 @@ HIDDEN_THRESHOLD_K = 0.0037
 HIDDEN_THRESHOLD_P = 0.85
 FIRST_CYCLE_THRESHOLD_SECONDS_TEST = 10.0
 DEFAULT_ENVIRONMENT_KEYS = ["water", "earth", "air", "fire"]
+GENERATOR_PARENT_ORDER = ["air", "earth", "fire", "water"]
 PROTOTYPES_BY_NAME = {p["name"]: p for p in PROTOTYPE_LIBRARY}
 
 
@@ -471,6 +472,48 @@ def main():
         )
         return env_name in world.environments
 
+    def serialize_world_environments():
+        known = {}
+        for env_name, env in world.environments.items():
+            env_key = str(env_name or "").lower()
+            if env_key in DEFAULT_ENVIRONMENT_KEYS:
+                continue
+            known[env_key] = {
+                "name": env_key,
+                "weights": {str(k).lower(): float(v) for k, v in env.weights.items()},
+                "traits": {str(k): float(v) for k, v in env.traits.items()},
+                "generation": int(env.generation),
+                "parents": [str(p).lower() for p in env.parents],
+            }
+        return known
+
+    def restore_known_environments(serialized_environments):
+        if not isinstance(serialized_environments, dict):
+            return
+        for env_name, payload in serialized_environments.items():
+            if not isinstance(payload, dict):
+                continue
+            name = str(payload.get("name", env_name) or "").lower()
+            if not name or name in DEFAULT_ENVIRONMENT_KEYS:
+                continue
+            weights = payload.get("weights", {})
+            traits = payload.get("traits", {})
+            parents = payload.get("parents", [])
+            if not isinstance(weights, dict) or not isinstance(traits, dict):
+                continue
+            if not isinstance(parents, list):
+                parents = []
+            try:
+                world.environments[name] = Environment(
+                    name=name,
+                    weights={str(k).lower(): float(v) for k, v in weights.items()},
+                    traits={str(k): float(v) for k, v in traits.items()},
+                    generation=int(payload.get("generation", 0)),
+                    parents=[str(p).lower() for p in parents],
+                )
+            except Exception:
+                continue
+
     def mark_save_dirty():
         nonlocal save_dirty
         if active_slot_index is None:
@@ -479,6 +522,22 @@ def main():
 
     def get_active_environment_keys():
         return list(environment_slot_keys)
+
+    def get_generation_parent_keys():
+        active_keys = [key for key in get_active_environment_keys() if ensure_environment_known(key)]
+        ordered = []
+        for key in GENERATOR_PARENT_ORDER:
+            if key in active_keys and key not in ordered:
+                ordered.append(key)
+        for key in active_keys:
+            if key not in ordered:
+                ordered.append(key)
+        for key in GENERATOR_PARENT_ORDER:
+            if len(ordered) >= 4:
+                break
+            if key not in ordered and ensure_environment_known(key):
+                ordered.append(key)
+        return ordered[:4]
 
     def normalize_environment_time_seconds():
         nonlocal environment_time_seconds
@@ -520,15 +579,8 @@ def main():
 
     def generate_hidden_environment_from_progress():
         nonlocal hidden_environment_name
-        active_keys = get_active_environment_keys()
         normalize_environment_time_seconds()
-        parent_keys = [key for key in active_keys if ensure_environment_known(key)]
-        for key in DEFAULT_ENVIRONMENT_KEYS:
-            if len(parent_keys) >= 4:
-                break
-            if key not in parent_keys and ensure_environment_known(key):
-                parent_keys.append(key)
-        parent_keys = parent_keys[:4]
+        parent_keys = get_generation_parent_keys()
         if len(parent_keys) < 4:
             hidden_environment_name = "fire"
             ensure_environment_background(hidden_environment_name)
@@ -649,6 +701,7 @@ def main():
         slot["hidden_slot_index"] = int(hidden_slot_index)
         slot["environment_slot_keys"] = list(environment_slot_keys)
         slot["awaiting_hidden_relock_choice"] = bool(awaiting_hidden_relock_choice)
+        slot["known_environments"] = serialize_world_environments()
         try:
             write_save_slots(save_slots)
             save_dirty = False
@@ -663,8 +716,10 @@ def main():
         nonlocal hidden_environment_name, hidden_cycle_index, hidden_slot_index, environment_slot_keys
         nonlocal awaiting_hidden_relock_choice
         nonlocal pause_menu_open, reset_confirm_open, quit_confirm_open
+        nonlocal world
         active_slot_index = slot_index
         slot = save_slots[slot_index]
+        world = World()
 
         if force_new or (not slot.get("used", False)):
             current_tab = "stats"
@@ -702,6 +757,7 @@ def main():
             hidden_slot_index = int(slot.get("hidden_slot_index", 3))
             if hidden_slot_index not in (0, 1, 2, 3):
                 hidden_slot_index = 3
+            restore_known_environments(slot.get("known_environments", {}))
             loaded_slot_keys = slot.get("environment_slot_keys", DEFAULT_ENVIRONMENT_KEYS)
             if isinstance(loaded_slot_keys, list) and len(loaded_slot_keys) == 4:
                 environment_slot_keys = []

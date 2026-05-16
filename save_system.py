@@ -25,6 +25,7 @@ def new_slot_state():
         "hidden_slot_index": 3,
         "environment_slot_keys": list(DEFAULT_ENVIRONMENT_KEYS),
         "awaiting_hidden_relock_choice": False,
+        "known_environments": {},
     }
 
 
@@ -86,6 +87,7 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
                 "hidden_slot_index": int(candidate.get("hidden_slot_index", 3)),
                 "environment_slot_keys": candidate.get("environment_slot_keys", DEFAULT_ENVIRONMENT_KEYS),
                 "awaiting_hidden_relock_choice": bool(candidate.get("awaiting_hidden_relock_choice", False)),
+                "known_environments": candidate.get("known_environments", {}),
             })
             if merged["hidden_cycle_index"] < 1:
                 merged["hidden_cycle_index"] = 1
@@ -111,6 +113,8 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
             if merged["evolution_stage"] not in {"dormant", "cracked", "hatching", "petawaru"}:
                 merged["evolution_stage"] = "dormant"
             merged["evolution_click_progress"] = max(0, min(2, merged["evolution_click_progress"]))
+            if not isinstance(merged["known_environments"], dict):
+                merged["known_environments"] = {}
             slots.append(merged)
         return slots
     except Exception:
