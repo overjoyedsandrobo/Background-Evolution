@@ -87,7 +87,7 @@ class KnownEnvironment(Base):
     name: Mapped[str] = mapped_column(String(64))
     weights: Mapped[dict[str, float]] = mapped_column(JSONB)
     traits: Mapped[dict[str, float]] = mapped_column(JSONB)
-    generation: Mapped[int] = mapped_column(Integer)
+    tier: Mapped[float] = mapped_column(Float)
     parents: Mapped[list[str]] = mapped_column(JSONB)
 
     slot: Mapped[SaveSlot] = relationship(back_populates="known_environments")

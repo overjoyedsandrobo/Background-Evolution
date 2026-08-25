@@ -11,13 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.game_engine.environment_generator import BASE_ENVIRONMENTS, Environment, World
-from app.game_engine.prototypes import PROTOTYPE_LIBRARY
 from app.models import EnvironmentTimeSeconds, KnownEnvironment, SaveSlot
 from app.progression import should_reveal_hidden_environment
 
 DEFAULT_ENVIRONMENT_SLOT_KEYS = ["water", "earth", "air", "fire"]
 GENERATOR_PARENT_ORDER = ["air", "earth", "fire", "water"]
-PROTOTYPES_BY_NAME = {p["name"]: p for p in PROTOTYPE_LIBRARY}
 
 
 class SlotNotFoundError(LookupError):
@@ -71,7 +69,7 @@ def slot_detail_dict(slot: SaveSlot) -> dict:
                 "name": row.name,
                 "weights": row.weights,
                 "traits": row.traits,
-                "generation": row.generation,
+                "tier": row.tier,
                 "parents": row.parents,
             }
             for row in slot.known_environments
@@ -133,50 +131,27 @@ def reset_slot(db: Session, slot_id: int) -> SaveSlot:
     return slot
 
 
-def _get_prototype_key(env_name: str) -> str | None:
-    env_key = env_name.lower()
-    if env_key in PROTOTYPES_BY_NAME:
-        return env_key
-    base_key, _, suffix = env_key.rpartition("_")
-    if suffix.isdigit() and base_key in PROTOTYPES_BY_NAME:
-        return base_key
-    return None
-
-
 def ensure_environment_known(db: Session, slot: SaveSlot, env_name: str | None) -> bool:
-    env_name = str(env_name or "").lower()
+    # Base environment keys are always lowercase (they're the hardcoded
+    # slot-key vocabulary), but generated names carry whatever case
+    # naming.compose_name produced - only fold case for the base check.
+    env_name = str(env_name or "")
     if not env_name:
         return False
-    if env_name in BASE_ENVIRONMENTS:
+    if env_name.lower() in BASE_ENVIRONMENTS:
         return True
-    if any(row.name == env_name for row in slot.known_environments):
-        return True
-    prototype_key = _get_prototype_key(env_name)
-    if prototype_key is None:
-        return False
-    prototype = PROTOTYPES_BY_NAME[prototype_key]
-    slot.known_environments.append(
-        KnownEnvironment(
-            name=env_name,
-            weights={prototype_key: 1.0},
-            traits=dict(prototype["traits"]),
-            generation=int(prototype["gen_affinity"]),
-            parents=[],
-        )
-    )
-    db.flush()
-    return True
+    return any(row.name == env_name for row in slot.known_environments)
 
 
 def get_environment_dict(slot: SaveSlot, name: str) -> dict | None:
-    name = str(name or "").lower()
-    if name in BASE_ENVIRONMENTS:
-        base = BASE_ENVIRONMENTS[name]
+    name = str(name or "")
+    if name.lower() in BASE_ENVIRONMENTS:
+        base = BASE_ENVIRONMENTS[name.lower()]
         return {
             "name": base.name,
             "weights": base.weights,
             "traits": base.traits,
-            "generation": base.generation,
+            "tier": base.tier,
             "parents": base.parents,
         }
     row = next((r for r in slot.known_environments if r.name == name), None)
@@ -186,7 +161,7 @@ def get_environment_dict(slot: SaveSlot, name: str) -> dict | None:
         "name": row.name,
         "weights": row.weights,
         "traits": row.traits,
-        "generation": row.generation,
+        "tier": row.tier,
         "parents": row.parents,
     }
 
@@ -198,7 +173,7 @@ def build_world_for_slot(slot: SaveSlot) -> World:
             name=row.name,
             weights=dict(row.weights),
             traits=dict(row.traits),
-            generation=row.generation,
+            tier=row.tier,
             parents=list(row.parents),
         )
     return world
@@ -228,7 +203,7 @@ def _upsert_known_environment(db: Session, slot: SaveSlot, env: Environment) -> 
     if existing is not None:
         existing.weights = dict(env.weights)
         existing.traits = dict(env.traits)
-        existing.generation = env.generation
+        existing.tier = env.tier
         existing.parents = list(env.parents)
     else:
         slot.known_environments.append(
@@ -236,7 +211,7 @@ def _upsert_known_environment(db: Session, slot: SaveSlot, env: Environment) -> 
                 name=env.name,
                 weights=dict(env.weights),
                 traits=dict(env.traits),
-                generation=env.generation,
+                tier=env.tier,
                 parents=list(env.parents),
             )
         )

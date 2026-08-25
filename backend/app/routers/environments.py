@@ -34,7 +34,7 @@ def generate_environment(slot_id: int, db: Session = Depends(get_db)):
 def ensure_environment(slot_id: int, name: str, db: Session = Depends(get_db)):
     slot = _get_slot_or_404(db, slot_id)
     if not crud.ensure_environment_known(db, slot, name):
-        raise HTTPException(status_code=404, detail=f"'{name}' is not a known prototype")
+        raise HTTPException(status_code=404, detail=f"'{name}' is not a known environment")
     db.commit()
     db.refresh(slot)
     env = crud.get_environment_dict(slot, name)

@@ -1,16 +1,10 @@
-from app.game_engine.prototypes import ALL_TRAITS, PROTOTYPE_LIBRARY
+from app.game_engine.prototypes import ALL_TRAITS
 
 
-def test_every_prototype_has_all_trait_keys():
-    for proto in PROTOTYPE_LIBRARY:
-        assert set(proto["traits"].keys()) == set(ALL_TRAITS)
+def test_all_traits_non_empty_and_unique():
+    assert len(ALL_TRAITS) == len(set(ALL_TRAITS))
+    assert len(ALL_TRAITS) > 0
 
 
-def test_no_duplicate_prototype_names():
-    names = [p["name"] for p in PROTOTYPE_LIBRARY]
-    assert len(names) == len(set(names))
-
-
-def test_gen_affinity_is_non_negative():
-    for proto in PROTOTYPE_LIBRARY:
-        assert proto["gen_affinity"] >= 0
+def test_emergent_traits_present():
+    assert {"arcane", "resonance", "corruption", "sanctity"} <= set(ALL_TRAITS)

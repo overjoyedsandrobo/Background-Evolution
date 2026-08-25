@@ -10,7 +10,7 @@ class EnvironmentSchema(BaseModel):
     name: str
     weights: dict[str, float]
     traits: dict[str, float]
-    generation: int
+    tier: float
     parents: list[str]
 
     model_config = {"from_attributes": True}
