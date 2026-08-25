@@ -5,5 +5,11 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
 
+[lint.isort]
+known-first-party = ["app"]
+
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends"]
+
 [format]
 quote-style = "double"
