@@ -25,7 +25,7 @@ def test_cascade_delete_removes_children(db_session):
     db_session.add(EnvironmentTimeSeconds(slot_id=0, environment_key="fire", seconds=1.0))
     db_session.add(
         KnownEnvironment(
-            slot_id=0, name="volcano", weights={"fire": 1.0}, traits={}, generation=1, parents=[]
+            slot_id=0, name="volcano", weights={"fire": 1.0}, traits={}, tier=1.0, parents=[]
         )
     )
     db_session.commit()

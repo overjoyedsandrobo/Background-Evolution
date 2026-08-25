@@ -6,7 +6,7 @@ def test_generate_with_seeded_time_appears_in_known_environments(client):
     generate_response = client.post("/slots/0/environments/generate")
     assert generate_response.status_code == 200
     generated = generate_response.json()
-    assert generated["generation"] == 1
+    assert generated["tier"] == 1.0
 
     listing = client.get("/slots/0/environments")
     assert listing.status_code == 200
@@ -36,13 +36,16 @@ def test_ensure_known_base_environment(client):
     assert response.json()["name"] == "fire"
 
 
-def test_ensure_known_gen1_prototype(client):
-    response = client.post("/slots/0/environments/ocean/ensure")
-    assert response.status_code == 200
-    assert response.json()["name"] == "ocean"
+def test_ensure_known_generated_environment(client):
+    client.patch(
+        "/slots/0",
+        json={"environment_time_seconds": {"water": 5.0, "earth": 2.0, "air": 1.0, "fire": 1.0}},
+    )
+    generated = client.post("/slots/0/environments/generate").json()
 
-    listing = client.get("/slots/0/environments").json()
-    assert any(e["name"] == "ocean" for e in listing)
+    response = client.post(f"/slots/0/environments/{generated['name']}/ensure")
+    assert response.status_code == 200
+    assert response.json()["name"] == generated["name"]
 
 
 def test_ensure_unknown_name_returns_404(client):

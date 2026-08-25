@@ -25,7 +25,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    restart: "no"
+    # db's healthcheck passing doesn't guarantee the Docker Desktop embedded
+    # DNS resolver has propagated the "db" hostname yet - a networking race,
+    # not a Postgres-readiness problem. Retry a few times instead of
+    # requiring a manual `docker compose up` re-run.
+    restart: on-failure:5
 
   backend:
     build:
