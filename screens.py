@@ -33,11 +33,15 @@ def get_ui_layout(canvas_w, canvas_h, egg_rect, canvas_scale):
     )
     tab_w = tabs_rect.width // 2
     stats_tab_rect = pygame.Rect(tabs_rect.x, tabs_rect.y, tab_w, tabs_rect.height)
-    environment_tab_rect = pygame.Rect(tabs_rect.x + tab_w, tabs_rect.y, tabs_rect.width - tab_w, tabs_rect.height)
+    environment_tab_rect = pygame.Rect(
+        tabs_rect.x + tab_w, tabs_rect.y, tabs_rect.width - tab_w, tabs_rect.height
+    )
     return stats_tab_rect, environment_tab_rect, page_rect
 
 
-def get_stats_row_rect_for_label(canvas_w, canvas_h, egg_rect, canvas_scale, stat_items, target_label):
+def get_stats_row_rect_for_label(
+    canvas_w, canvas_h, egg_rect, canvas_scale, stat_items, target_label
+):
     _, _, page_rect = get_ui_layout(canvas_w, canvas_h, egg_rect, canvas_scale)
     if not stat_items:
         return None
@@ -104,7 +108,9 @@ def draw_start_menu(canvas, canvas_w, canvas_h, font, start_bg_image):
     canvas.blit(start_txt, start_txt.get_rect(center=start_btn.center))
 
 
-def draw_save_select(canvas, canvas_w, canvas_h, font, save_slots, num_save_slots, canvas_scale, format_time):
+def draw_save_select(
+    canvas, canvas_w, canvas_h, font, save_slots, num_save_slots, canvas_scale, format_time
+):
     for idx in range(num_save_slots):
         slot_rect = get_save_slot_rect(canvas_w, canvas_h, num_save_slots, idx)
         shade = 42 + (idx % 2) * 8
@@ -113,12 +119,22 @@ def draw_save_select(canvas, canvas_w, canvas_h, font, save_slots, num_save_slot
 
         slot = save_slots[idx]
         slot_title = font.render(f"Save Slot {idx + 1}", True, (238, 238, 240))
-        canvas.blit(slot_title, slot_title.get_rect(midleft=(int(20 * canvas_scale), slot_rect.top + int(26 * canvas_scale))))
+        canvas.blit(
+            slot_title,
+            slot_title.get_rect(
+                midleft=(int(20 * canvas_scale), slot_rect.top + int(26 * canvas_scale))
+            ),
+        )
 
         if slot.get("used", False):
             details = f"Time {format_time(slot.get('time_alive_seconds', 0.0))}"
             detail_surf = font.render(details, True, (195, 204, 215))
-            canvas.blit(detail_surf, detail_surf.get_rect(midleft=(int(20 * canvas_scale), slot_rect.top + int(62 * canvas_scale))))
+            canvas.blit(
+                detail_surf,
+                detail_surf.get_rect(
+                    midleft=(int(20 * canvas_scale), slot_rect.top + int(62 * canvas_scale))
+                ),
+            )
 
 
 def draw_game_screen(
@@ -170,21 +186,35 @@ def draw_game_screen(
 
     canvas.blit(egg_sprite, egg_rect_draw)
 
-    stats_tab_rect, environment_tab_rect, page_rect = get_ui_layout(canvas_w, canvas_h, layout_anchor_rect, canvas_scale)
+    stats_tab_rect, environment_tab_rect, page_rect = get_ui_layout(
+        canvas_w, canvas_h, layout_anchor_rect, canvas_scale
+    )
     active_tab_color = (78, 98, 126)
     inactive_tab_color = (48, 48, 54)
     border_color = (90, 90, 96)
     text_color = (230, 230, 230)
 
-    pygame.draw.rect(canvas, active_tab_color if current_tab == "stats" else inactive_tab_color, stats_tab_rect, border_radius=8)
-    pygame.draw.rect(canvas, active_tab_color if current_tab == "environment" else inactive_tab_color, environment_tab_rect, border_radius=8)
+    pygame.draw.rect(
+        canvas,
+        active_tab_color if current_tab == "stats" else inactive_tab_color,
+        stats_tab_rect,
+        border_radius=8,
+    )
+    pygame.draw.rect(
+        canvas,
+        active_tab_color if current_tab == "environment" else inactive_tab_color,
+        environment_tab_rect,
+        border_radius=8,
+    )
     pygame.draw.rect(canvas, border_color, stats_tab_rect, 2, border_radius=8)
     pygame.draw.rect(canvas, border_color, environment_tab_rect, 2, border_radius=8)
 
     stats_tab_text = font.render("Stats", True, text_color)
     environment_tab_text = font.render("Environment", True, text_color)
     canvas.blit(stats_tab_text, stats_tab_text.get_rect(center=stats_tab_rect.center))
-    canvas.blit(environment_tab_text, environment_tab_text.get_rect(center=environment_tab_rect.center))
+    canvas.blit(
+        environment_tab_text, environment_tab_text.get_rect(center=environment_tab_rect.center)
+    )
 
     pygame.draw.rect(canvas, (40, 40, 44), page_rect, border_radius=10)
     pygame.draw.rect(canvas, border_color, page_rect, 2, border_radius=10)
@@ -211,15 +241,23 @@ def draw_game_screen(
             value_color = (150, 220, 255) if label == "Extra Stats" else (190, 220, 190)
             label_surf = font.render(label, True, label_color)
             value_surf = font.render(stat_values.get(label, "0"), True, value_color)
-            canvas.blit(label_surf, label_surf.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery)))
-            canvas.blit(value_surf, value_surf.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)))
+            canvas.blit(
+                label_surf,
+                label_surf.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery)),
+            )
+            canvas.blit(
+                value_surf,
+                value_surf.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)),
+            )
     else:
         for idx, env_key in enumerate(environment_slot_keys):
             display_label = env_key.capitalize()
-            card = get_environment_card_rect(canvas_w, canvas_h, layout_anchor_rect, canvas_scale, idx)
+            card = get_environment_card_rect(
+                canvas_w, canvas_h, layout_anchor_rect, canvas_scale, idx
+            )
             is_base_environment = env_key in {"water", "earth", "air", "fire"}
             is_locked = is_base_environment and (not environments_unlocked)
-            is_selected = (env_key == selected_environment)
+            is_selected = env_key == selected_environment
 
             pygame.draw.rect(canvas, (95, 95, 95), card)
             card_bg = environment_card_backgrounds.get(env_key)
@@ -237,7 +275,10 @@ def draw_game_screen(
             if is_locked:
                 draw_lock_on_card(canvas, lock_image, card)
             label_surf = font.render(display_label, True, (240, 240, 240))
-            canvas.blit(label_surf, label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * canvas_scale))))
+            canvas.blit(
+                label_surf,
+                label_surf.get_rect(midtop=(card.centerx, card.top + int(10 * canvas_scale))),
+            )
             if environment_ratios:
                 percent = f"{environment_ratios.get(env_key, 0.0) * 100:.0f}%"
                 percent_surf = font.render(percent, True, (246, 248, 250))
@@ -252,15 +293,29 @@ def draw_game_screen(
                 canvas.blit(percent_surf, percent_surf.get_rect(center=pill_rect.center))
             if is_locked:
                 locked_surf = font.render("Locked", True, (70, 70, 70))
-                canvas.blit(locked_surf, locked_surf.get_rect(midbottom=(card.centerx, card.bottom - int(38 * canvas_scale))))
+                canvas.blit(
+                    locked_surf,
+                    locked_surf.get_rect(
+                        midbottom=(card.centerx, card.bottom - int(38 * canvas_scale))
+                    ),
+                )
             elif is_selected:
                 selected_surf = font.render("Selected", True, (215, 245, 215))
-                canvas.blit(selected_surf, selected_surf.get_rect(midbottom=(card.centerx, card.bottom - int(38 * canvas_scale))))
+                canvas.blit(
+                    selected_surf,
+                    selected_surf.get_rect(
+                        midbottom=(card.centerx, card.bottom - int(38 * canvas_scale))
+                    ),
+                )
 
         divider_x = page_rect.x + (page_rect.width // 2)
         divider_y = page_rect.y + (page_rect.height // 2)
-        pygame.draw.line(canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2)
-        pygame.draw.line(canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2)
+        pygame.draw.line(
+            canvas, (0, 0, 0), (divider_x, page_rect.y), (divider_x, page_rect.bottom), 2
+        )
+        pygame.draw.line(
+            canvas, (0, 0, 0), (page_rect.x, divider_y), (page_rect.right, divider_y), 2
+        )
 
     return stats_tab_rect, environment_tab_rect
 
@@ -286,5 +341,10 @@ def draw_extra_stats_page(canvas, canvas_w, canvas_h, font, canvas_scale, extra_
             pygame.draw.rect(canvas, (46, 52, 60), row)
         label_text = font.render(label, True, (213, 225, 238))
         value_text = font.render("0", True, (190, 220, 190))
-        canvas.blit(label_text, label_text.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery)))
-        canvas.blit(value_text, value_text.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)))
+        canvas.blit(
+            label_text, label_text.get_rect(midleft=(row.x + int(12 * canvas_scale), row.centery))
+        )
+        canvas.blit(
+            value_text,
+            value_text.get_rect(midright=(row.right - int(12 * canvas_scale), row.centery)),
+        )
