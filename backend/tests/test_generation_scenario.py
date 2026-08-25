@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from app.game_engine.environment_generator import World
-from app.game_engine.naming import COSMIC_TEMPLATES, words_for_element
+from app.game_engine.naming import cosmic_openers, words_for_element
 
 BASE_KEYS = ["air", "earth", "water", "fire"]
 STEPS = 10
@@ -32,7 +32,7 @@ def _name_reflects_composition(name: str, weights: dict[str, float], tier: float
     ordered = sorted(full_weights.items(), key=lambda kv: kv[1], reverse=True)
     dominant = ordered[0][0]
     if tier >= 11.0:
-        return any(phrase in name for phrase in COSMIC_TEMPLATES[dominant])
+        return any(opener in name for opener in cosmic_openers(dominant))
     second = ordered[1][0]
     candidates = words_for_element(dominant) | words_for_element(second)
     return any(word in name for word in candidates)

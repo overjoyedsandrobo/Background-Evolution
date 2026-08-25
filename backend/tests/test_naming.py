@@ -1,11 +1,13 @@
 import random
 
 from app.game_engine.naming import (
-    COSMIC_TEMPLATES,
+    COSMIC_OBJECTS,
+    COSMIC_STEMS,
     EMERGENT_QUALIFIERS,
     VOCAB,
     _band_for_tier,
     compose_name,
+    cosmic_openers,
     words_for_element,
 )
 from app.game_engine.prototypes import ALL_TRAITS
@@ -74,12 +76,24 @@ def test_higher_bands_use_progressively_different_vocabulary():
     assert len(seen_bands) == 4
 
 
-def test_cosmic_band_uses_poetic_templates_not_noun_grammar():
+def test_cosmic_band_uses_poetic_stems_not_noun_grammar():
     random.seed(0)
     weights = {"water": 1.0, "fire": 0.0, "earth": 0.0, "air": 0.0}
+    openers = cosmic_openers("water")
     for _ in range(10):
         name = compose_name(weights, _traits(), tier=11.0)
-        assert name in COSMIC_TEMPLATES["water"]
+        assert any(name.startswith(opener) for opener in openers)
+        assert any(obj in name for obj in COSMIC_OBJECTS)
+
+
+def test_cosmic_stems_and_objects_combine_without_breaking_grammar():
+    random.seed(0)
+    for stems in COSMIC_STEMS.values():
+        for stem in stems:
+            for obj in COSMIC_OBJECTS:
+                composed = stem.format(obj=obj)
+                assert composed.startswith(stem.split("{obj}")[0])
+                assert composed.endswith(obj)
 
 
 def test_emergent_trait_over_threshold_adds_qualifier_prefix():

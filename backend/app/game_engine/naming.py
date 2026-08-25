@@ -128,29 +128,66 @@ VOCAB = {
 BAND_ORDER = ["grounded", "wild", "elemental", "mythic", "celestial"]
 
 # Band 6: geography stops making sense at this scale, so it's poetic
-# fragments per dominant element instead of noun/adjective grammar.
-COSMIC_TEMPLATES = {
+# fragments per dominant element instead of noun/adjective grammar. Each
+# stem ends with a `{obj}` slot filled from the shared COSMIC_OBJECTS bank
+# below - combinatorial (stems x objects), not one fixed phrase per line,
+# so the rarest tier has the deepest vocabulary instead of the shallowest.
+# Every object is a generic cosmic-scale noun, so it drops into any stem's
+# slot without breaking the sentence.
+COSMIC_STEMS = {
     "fire": [
-        "Where Embers Outlive Stars",
-        "The Flame That Ate the Dark",
-        "Ash Older Than Light",
+        "Where Embers Outlive {obj}",
+        "The Flame That Ate {obj}",
+        "Ash Older Than {obj}",
+        "The Fire That Remembers {obj}",
+        "Where the Last Ember Outshines {obj}",
     ],
     "water": [
-        "Where the Tide Forgot Time",
-        "The Deep Beneath All Deeps",
-        "Where Silence Drowns",
+        "Where the Tide Forgot {obj}",
+        "The Deep Beneath {obj}",
+        "Where Silence Drowns {obj}",
+        "The Current That Swallowed {obj}",
+        "Where the Abyss Keeps {obj}",
     ],
     "earth": [
-        "The Root Beneath Reality",
-        "Stone Older Than the First Word",
-        "Where Mountains Dream",
+        "The Root Beneath {obj}",
+        "Stone Older Than {obj}",
+        "Where Mountains Dream of {obj}",
+        "The Bedrock That Remembers {obj}",
+        "Where the World Buried {obj}",
     ],
     "air": [
-        "Where the Wind Remembers Nothing",
-        "The Sky Beyond the Sky",
-        "Silence Between Storms",
+        "Where the Wind Remembers {obj}",
+        "The Sky Beyond {obj}",
+        "Silence Between {obj}",
+        "Where the Last Breath Carried {obj}",
+        "The Gale That Erased {obj}",
     ],
 }
+
+COSMIC_OBJECTS = [
+    "Stars",
+    "Time",
+    "Light",
+    "the Dark",
+    "Eternity",
+    "Memory",
+    "Silence",
+    "the Void",
+    "the First Word",
+    "Tomorrow",
+    "Reason",
+    "the Last Sound",
+]
+
+
+def cosmic_openers(element: str) -> list[str]:
+    """The fixed lead-in text of each cosmic stem for this element, before
+    the {obj} slot - lets a caller recognize a composed cosmic name as
+    belonging to this element without needing to know which object was
+    picked."""
+    return [stem.split("{obj}")[0].strip() for stem in COSMIC_STEMS[element]]
+
 
 EMERGENT_THRESHOLD = 0.6
 EMERGENT_QUALIFIERS = {
@@ -233,7 +270,9 @@ def compose_name(
 
     def _candidate() -> str:
         if band == "cosmic":
-            return f"{prefix}{random.choice(COSMIC_TEMPLATES[dominant])}"
+            stem = random.choice(COSMIC_STEMS[dominant])
+            obj = random.choice(COSMIC_OBJECTS)
+            return f"{prefix}{stem.format(obj=obj)}"
         vocab = VOCAB[band]
         if is_hybrid:
             adjective = random.choice(vocab[second]["adj"])
