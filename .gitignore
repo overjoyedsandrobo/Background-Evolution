@@ -18,6 +18,9 @@ env/
 # Player save data (owned by Postgres, not git)
 saves/save_slots.json
 
+# Auto-generated test reports (regenerated on every pytest run)
+backend/tests/output/
+
 # Editor / OS
 .vscode/
 .idea/
