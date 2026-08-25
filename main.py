@@ -1,27 +1,29 @@
-import sys
-import os
-import time
+import contextlib
 import ctypes
 import math
+import os
+import sys
+import time
 from ctypes import wintypes
-from typing import Optional
+
 import pygame
-from save_system import load_save_slots, write_save_slots, new_slot_state
+
 from environment_generator_v4_full import Environment, World
 from prototypes_v4_fitted import PROTOTYPE_LIBRARY
-from ui_helpers import ShakeAnimation, format_time
-from win32_types import RECT, POINT, MINMAXINFO, MONITORINFO
-from tray_support import start_tray_icon
+from save_system import load_save_slots, new_slot_state, write_save_slots
 from screens import (
     draw_extra_stats_page,
     draw_game_screen,
     draw_save_select,
     draw_start_menu,
     get_environment_card_rect,
-    get_stats_row_rect_for_label,
     get_start_button_rect,
+    get_stats_row_rect_for_label,
     get_ui_layout,
 )
+from tray_support import start_tray_icon
+from ui_helpers import ShakeAnimation, format_time
+from win32_types import MINMAXINFO, MONITORINFO, RECT
 
 WINDOW_W, WINDOW_H = 300, 600
 RESOLUTION_SCALE = 4
@@ -75,12 +77,12 @@ def main():
         try:
             info = pygame.display.get_wm_info()
             # common key on Windows is 'window'
-            return info.get('window') or info.get('hwnd')
+            return info.get("window") or info.get("hwnd")
         except Exception:
             return None
 
     def hide_window():
-        if sys.platform != 'win32':
+        if sys.platform != "win32":
             return
         hwnd = _get_hwnd()
         if not hwnd:
@@ -92,13 +94,12 @@ def main():
             pass
 
     def show_window():
-        if sys.platform != 'win32':
+        if sys.platform != "win32":
             return
         hwnd = _get_hwnd()
         if not hwnd:
             return
         try:
-            SW_SHOW = 5
             SW_RESTORE = 9
             user32 = ctypes.windll.user32
             kernel32 = ctypes.windll.kernel32
@@ -126,7 +127,7 @@ def main():
     egg_path = os.path.join("assets", "icons", "egg", "egg1.png")
     icon_path = egg_path
     lock_path = os.path.join("assets", "icons", "misc", "lock.webp")
-    lock_image: Optional[pygame.Surface] = None
+    lock_image: pygame.Surface | None = None
     try:
         icon_surf = load_image_with_fallback(icon_path)
         if icon_surf is not None:
@@ -169,7 +170,7 @@ def main():
 
     # Keep native window controls functional, but suppress the icon/system-menu popup.
     def suppress_system_menu_popup():
-        if sys.platform != 'win32':
+        if sys.platform != "win32":
             return
         try:
             hwnd = _get_hwnd()
@@ -197,7 +198,13 @@ def main():
             set_long_ptr.restype = ctypes.c_void_p
 
             CallWindowProc = user32.CallWindowProcW
-            CallWindowProc.argtypes = [ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+            CallWindowProc.argtypes = [
+                ctypes.c_void_p,
+                wintypes.HWND,
+                wintypes.UINT,
+                wintypes.WPARAM,
+                wintypes.LPARAM,
+            ]
             CallWindowProc.restype = ctypes.c_ssize_t
             MonitorFromWindow = user32.MonitorFromWindow
             MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
@@ -236,7 +243,9 @@ def main():
             if not old_proc:
                 return
 
-            WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+            WNDPROC = ctypes.WINFUNCTYPE(
+                ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+            )
 
             def get_max_window_bounds(target_hwnd):
                 max_w = window_size[0]
@@ -248,13 +257,13 @@ def main():
                     monitor_info = MONITORINFO()
                     monitor_info.cbSize = ctypes.sizeof(MONITORINFO)
                     if GetMonitorInfoW(monitor, ctypes.byref(monitor_info)):
-                        work_w = monitor_info.rcWork.right 
+                        work_w = monitor_info.rcWork.right
                         work_h = monitor_info.rcWork.bottom
                         max_w = int((work_h) * ASPECT_RATIO)
                         max_h = work_h + 10
                         RIGHT_EDGE_NUDGE = 10
                         # Clamp to monitor bounds for safety.
-                        max_x = (work_w - max_w)+ RIGHT_EDGE_NUDGE
+                        max_x = (work_w - max_w) + RIGHT_EDGE_NUDGE
                 max_w = max(MIN_W, max_w)
                 max_h = max(MIN_H, max_h)
                 return max_w, max_h, max_x, max_y
@@ -279,9 +288,11 @@ def main():
                 nonlocal is_interactive_resizing
                 # Prevent title-bar icon clicks/double-clicks from opening system menu
                 # or triggering the default "close on icon double-click" behavior.
-                if msg in (WM_NCLBUTTONDOWN, WM_NCLBUTTONUP, WM_NCLBUTTONDBLCLK, WM_NCRBUTTONUP):
-                    if int(wparam) == HTSYSMENU:
-                        return 0
+                if (
+                    msg in (WM_NCLBUTTONDOWN, WM_NCLBUTTONUP, WM_NCLBUTTONDBLCLK, WM_NCRBUTTONUP)
+                    and int(wparam) == HTSYSMENU
+                ):
+                    return 0
 
                 if msg == WM_ENTERSIZEMOVE:
                     is_interactive_resizing = True
@@ -308,10 +319,8 @@ def main():
                         update_viewport((width, height))
                     result = CallWindowProc(old_proc, h, msg, wparam, lparam)
                     if live_redraw is not None and width > 0 and height > 0:
-                        try:
+                        with contextlib.suppress(Exception):
                             live_redraw(True)
-                        except Exception:
-                            pass
                     return result
 
                 if msg == WM_SIZING:
@@ -364,7 +373,9 @@ def main():
             win_hook_refs["old_proc"] = old_proc
             win_hook_refs["proc_ref"] = WNDPROC(_wndproc)
 
-            set_long_ptr(int(hwnd), GWL_WNDPROC, ctypes.cast(win_hook_refs["proc_ref"], ctypes.c_void_p))
+            set_long_ptr(
+                int(hwnd), GWL_WNDPROC, ctypes.cast(win_hook_refs["proc_ref"], ctypes.c_void_p)
+            )
         except Exception:
             pass
 
@@ -408,11 +419,12 @@ def main():
     quit_confirm_open = False
     app_screen = "start_menu"
     save_slots = load_save_slots(NUM_SAVE_SLOTS)
-    active_slot_index: Optional[int] = None
+    active_slot_index: int | None = None
     time_alive_seconds = 0.0
     save_dirty = False
     autosave_timer = 0.0
-    start_bg_image: Optional[pygame.Surface] = load_image_with_fallback(START_MENU_BACKGROUND_PATH)
+    start_bg_image: pygame.Surface | None = load_image_with_fallback(START_MENU_BACKGROUND_PATH)
+
     def create_fire_background():
         surf = pygame.Surface((canvas_w, canvas_h))
         for y in range(canvas_h):
@@ -433,12 +445,20 @@ def main():
             )
         return surf
 
-    fire_bg_image = load_image_with_fallback(os.path.join("assets", "icons", "background", "fire.png"))
-    if fire_bg_image is None or not os.path.exists(os.path.join("assets", "icons", "background", "fire.png")):
+    fire_bg_image = load_image_with_fallback(
+        os.path.join("assets", "icons", "background", "fire.png")
+    )
+    if fire_bg_image is None or not os.path.exists(
+        os.path.join("assets", "icons", "background", "fire.png")
+    ):
         fire_bg_image = create_fire_background()
     environment_backgrounds = {
-        "water": load_image_with_fallback(os.path.join("assets", "icons", "background", "water.png")),
-        "earth": load_image_with_fallback(os.path.join("assets", "icons", "background", "earth.png")),
+        "water": load_image_with_fallback(
+            os.path.join("assets", "icons", "background", "water.png")
+        ),
+        "earth": load_image_with_fallback(
+            os.path.join("assets", "icons", "background", "earth.png")
+        ),
         "air": load_image_with_fallback(os.path.join("assets", "icons", "background", "air.png")),
         "fire": fire_bg_image,
     }
@@ -524,7 +544,9 @@ def main():
         return list(environment_slot_keys)
 
     def get_generation_parent_keys():
-        active_keys = [key for key in get_active_environment_keys() if ensure_environment_known(key)]
+        active_keys = [
+            key for key in get_active_environment_keys() if ensure_environment_known(key)
+        ]
         ordered = []
         for key in GENERATOR_PARENT_ORDER:
             if key in active_keys and key not in ordered:
@@ -570,7 +592,9 @@ def main():
         if generated_bg is not None and os.path.exists(candidate_path):
             environment_backgrounds[env_name] = generated_bg
         else:
-            environment_backgrounds[env_name] = load_image_with_fallback(os.path.join("assets", "icons", "background", "hidden.png"))
+            environment_backgrounds[env_name] = load_image_with_fallback(
+                os.path.join("assets", "icons", "background", "hidden.png")
+            )
 
     def activate_generated_environment_slot():
         # Legacy save hook: generated environments are now applied only after
@@ -588,10 +612,7 @@ def main():
             return
         times = [max(0.0, float(environment_time_seconds.get(k, 0.0))) for k in parent_keys]
         total = sum(times)
-        if total <= 0.0:
-            ratios = [0.25] * 4
-        else:
-            ratios = [t / total for t in times]
+        ratios = [0.25] * 4 if total <= 0.0 else [t / total for t in times]
         try:
             generated_env = world.generate(parent_keys, ratios)
             hidden_environment_name = generated_env.name
@@ -611,7 +632,9 @@ def main():
         row_h = max(1, menu_rect.height // len(labels))
         rects = {}
         for idx, label in enumerate(labels):
-            rects[label] = pygame.Rect(menu_rect.x, menu_rect.y + idx * row_h, menu_rect.width, row_h)
+            rects[label] = pygame.Rect(
+                menu_rect.x, menu_rect.y + idx * row_h, menu_rect.width, row_h
+            )
         return menu_rect, rects
 
     def get_quit_confirm_rects():
@@ -642,7 +665,11 @@ def main():
         nonlocal current_tab, time_alive_seconds, evolution_stage, evolution_click_progress
         nonlocal status_flash_text, status_flash_timer
         nonlocal hatching_animation_active, hatching_animation_timer, egg_image
-        nonlocal selected_environment, environment_time_seconds, hidden_revealed, hidden_environment_name
+        nonlocal \
+            selected_environment, \
+            environment_time_seconds, \
+            hidden_revealed, \
+            hidden_environment_name
         nonlocal environment_slot_keys
         nonlocal hidden_cycle_index, hidden_slot_index, awaiting_hidden_relock_choice
         current_tab = "stats"
@@ -694,7 +721,9 @@ def main():
         slot["evolution_click_progress"] = max(0, min(2, int(evolution_click_progress)))
         slot["selected_environment"] = selected_environment
         normalize_environment_time_seconds()
-        slot["environment_time_seconds"] = {k: max(0.0, float(v)) for k, v in environment_time_seconds.items()}
+        slot["environment_time_seconds"] = {
+            k: max(0.0, float(v)) for k, v in environment_time_seconds.items()
+        }
         slot["hidden_revealed"] = bool(hidden_revealed)
         slot["hidden_environment_name"] = hidden_environment_name
         slot["hidden_cycle_index"] = int(hidden_cycle_index)
@@ -709,11 +738,21 @@ def main():
             pass
 
     def enter_slot(slot_index, force_new=False):
-        nonlocal active_slot_index, app_screen, current_tab, time_alive_seconds, save_dirty, autosave_timer
+        nonlocal \
+            active_slot_index, \
+            app_screen, \
+            current_tab, \
+            time_alive_seconds, \
+            save_dirty, \
+            autosave_timer
         nonlocal evolution_stage, evolution_click_progress, status_flash_text, status_flash_timer
         nonlocal hatching_animation_active, hatching_animation_timer, egg_image
         nonlocal selected_environment, environment_time_seconds, hidden_revealed
-        nonlocal hidden_environment_name, hidden_cycle_index, hidden_slot_index, environment_slot_keys
+        nonlocal \
+            hidden_environment_name, \
+            hidden_cycle_index, \
+            hidden_slot_index, \
+            environment_slot_keys
         nonlocal awaiting_hidden_relock_choice
         nonlocal pause_menu_open, reset_confirm_open, quit_confirm_open
         nonlocal world
@@ -744,10 +783,7 @@ def main():
                 evolution_stage = "dormant"
             evolution_click_progress = max(0, min(2, int(slot.get("evolution_click_progress", 0))))
             selected_raw = slot.get("selected_environment", None)
-            if selected_raw is None:
-                selected_environment = None
-            else:
-                selected_environment = str(selected_raw).lower()
+            selected_environment = None if selected_raw is None else str(selected_raw).lower()
             loaded_times = slot.get("environment_time_seconds", {})
             if not isinstance(loaded_times, dict):
                 loaded_times = {}
@@ -785,7 +821,10 @@ def main():
                 environment_time_seconds[k] = max(0.0, float(loaded_times.get(k, 0.0)))
             awaiting_hidden_relock_choice = bool(slot.get("awaiting_hidden_relock_choice", False))
 
-            if sum(max(0.0, float(environment_time_seconds.get(k, 0.0))) for k in get_active_environment_keys()) >= get_hidden_unlock_threshold_seconds(hidden_cycle_index):
+            if sum(
+                max(0.0, float(environment_time_seconds.get(k, 0.0)))
+                for k in get_active_environment_keys()
+            ) >= get_hidden_unlock_threshold_seconds(hidden_cycle_index):
                 if not hidden_revealed:
                     hidden_revealed = True
                 if not hidden_environment_name:
@@ -794,7 +833,10 @@ def main():
                 awaiting_hidden_relock_choice = True
             if selected_environment == "hidden":
                 selected_environment = None
-            if selected_environment is not None and selected_environment not in environment_slot_keys:
+            if (
+                selected_environment is not None
+                and selected_environment not in environment_slot_keys
+            ):
                 selected_environment = None
             if evolution_stage == "hatching":
                 # Resume from the pre-hatch state and require the final trigger again.
@@ -823,17 +865,14 @@ def main():
 
     # start tray icon unless running headless (SDL dummy driver)
     if os.environ.get("SDL_VIDEODRIVER", "") != "dummy":
+
         def on_restore(icon, item):
-            try:
+            with contextlib.suppress(Exception):
                 pygame.event.post(pygame.event.Event(pygame.USEREVENT, {"action": "restore"}))
-            except Exception:
-                pass
 
         def on_exit(icon, item):
-            try:
+            with contextlib.suppress(Exception):
                 pygame.event.post(pygame.event.Event(pygame.USEREVENT, {"action": "exit"}))
-            except Exception:
-                pass
 
         tray_icon = start_tray_icon(
             icon_path=icon_path,
@@ -847,9 +886,11 @@ def main():
     egg_radius_base = 90
     egg_y_base = 220
     shake_magnitude_base = 5
-    base_egg_image: Optional[pygame.Surface] = load_image_with_fallback(egg_path)
-    petawaru_image: Optional[pygame.Surface] = load_image_with_fallback(PETAWARU_IMAGE_PATH)
-    egg_image: Optional[pygame.Surface] = petawaru_image if evolution_stage == "petawaru" else base_egg_image
+    base_egg_image: pygame.Surface | None = load_image_with_fallback(egg_path)
+    petawaru_image: pygame.Surface | None = load_image_with_fallback(PETAWARU_IMAGE_PATH)
+    egg_image: pygame.Surface | None = (
+        petawaru_image if evolution_stage == "petawaru" else base_egg_image
+    )
     egg_box_width = int(egg_radius_base * RESOLUTION_SCALE * 3)
     egg_box_height = int(egg_radius_base * RESOLUTION_SCALE * 3)
     egg_sprite: pygame.Surface = pygame.Surface((egg_box_width, egg_box_height), pygame.SRCALPHA)
@@ -897,7 +938,9 @@ def main():
         anim_sprite = pygame.transform.smoothscale(egg_sprite, (anim_w, anim_h))
 
         shake = int((1.0 - progress * 0.4) * 18 * math.sin(progress * math.pi * 34.0))
-        rect = anim_sprite.get_rect(center=(canvas_w // 2 + offset_x + shake, int(egg_y_base * get_canvas_scale())))
+        rect = anim_sprite.get_rect(
+            center=(canvas_w // 2 + offset_x + shake, int(egg_y_base * get_canvas_scale()))
+        )
         return anim_sprite, rect, progress
 
     def draw_hatching_cracks(rect, progress):
@@ -955,16 +998,21 @@ def main():
             draw_start_menu(canvas, canvas_w, canvas_h, font, start_bg_image)
 
         elif app_screen == "save_select":
-            draw_save_select(canvas, canvas_w, canvas_h, font, save_slots, NUM_SAVE_SLOTS, scale, format_time)
+            draw_save_select(
+                canvas, canvas_w, canvas_h, font, save_slots, NUM_SAVE_SLOTS, scale, format_time
+            )
 
         elif app_screen == "game":
             offset_x = shake.get_offset()
             egg_draw_sprite, egg_rect_draw, hatch_progress = get_draw_egg_for_frame(offset_x)
             layout_anchor_rect = get_egg_rect(offset_x)
-            active_environment_bg = environment_backgrounds.get(selected_environment) if selected_environment else None
+            active_environment_bg = (
+                environment_backgrounds.get(selected_environment) if selected_environment else None
+            )
             environments_unlocked = evolution_stage == "petawaru"
             environment_total_seconds = sum(
-                max(0.0, float(environment_time_seconds.get(k, 0.0))) for k in get_active_environment_keys()
+                max(0.0, float(environment_time_seconds.get(k, 0.0)))
+                for k in get_active_environment_keys()
             )
             draw_game_screen(
                 canvas,
@@ -1014,12 +1062,20 @@ def main():
                     )
                     if not card_rect.collidepoint(hovered_canvas_pos):
                         continue
-                    surface_glow = pygame.Surface((card_rect.width, card_rect.height), pygame.SRCALPHA)
+                    surface_glow = pygame.Surface(
+                        (card_rect.width, card_rect.height), pygame.SRCALPHA
+                    )
                     surface_glow.fill((248, 246, 235, int(28 + 42 * pulse)))
                     canvas.blit(surface_glow, card_rect.topleft)
 
-                pending_name = hidden_environment_name.capitalize() if hidden_environment_name else "New Environment"
-                discovery_font = pygame.font.SysFont(None, max(status_font.get_height(), int(42 * scale)))
+                pending_name = (
+                    hidden_environment_name.capitalize()
+                    if hidden_environment_name
+                    else "New Environment"
+                )
+                discovery_font = pygame.font.SysFont(
+                    None, max(status_font.get_height(), int(42 * scale))
+                )
                 msg1 = discovery_font.render(f"{pending_name} discovered", True, (255, 245, 218))
                 msg2 = font.render("Choose one environment to replace", True, (232, 236, 242))
                 canvas.blit(msg1, msg1.get_rect(center=(canvas_w // 2, int(68 * scale))))
@@ -1035,7 +1091,13 @@ def main():
 
                 for label, rect in option_rects.items():
                     if label != "Settings":
-                        pygame.draw.line(canvas, (70, 78, 90), (rect.x + 10, rect.y), (rect.right - 10, rect.y), 1)
+                        pygame.draw.line(
+                            canvas,
+                            (70, 78, 90),
+                            (rect.x + 10, rect.y),
+                            (rect.right - 10, rect.y),
+                            1,
+                        )
                     text = font.render(label, True, (232, 236, 242))
                     canvas.blit(text, text.get_rect(center=rect.center))
 
@@ -1049,7 +1111,15 @@ def main():
                     else:
                         question_text = "Are you sure you want to quit?"
                     question = font.render(question_text, True, (236, 240, 245))
-                    canvas.blit(question, question.get_rect(center=(confirm_rect.centerx, confirm_rect.y + int(confirm_rect.height * 0.3))))
+                    canvas.blit(
+                        question,
+                        question.get_rect(
+                            center=(
+                                confirm_rect.centerx,
+                                confirm_rect.y + int(confirm_rect.height * 0.3),
+                            )
+                        ),
+                    )
                     pygame.draw.rect(canvas, (124, 56, 56), yes_rect, border_radius=6)
                     pygame.draw.rect(canvas, (70, 110, 76), no_rect, border_radius=6)
                     yes_text = font.render("Yes", True, (245, 235, 235))
@@ -1077,7 +1147,11 @@ def main():
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
-        if app_screen in ("game", "extra_stats") and not pause_menu_open and not awaiting_hidden_relock_choice:
+        if (
+            app_screen in ("game", "extra_stats")
+            and not pause_menu_open
+            and not awaiting_hidden_relock_choice
+        ):
             time_alive_seconds += dt
             mark_save_dirty()
             autosave_timer += dt
@@ -1088,8 +1162,13 @@ def main():
         if app_screen == "game" and not pause_menu_open and not awaiting_hidden_relock_choice:
             if selected_environment in get_active_environment_keys():
                 environment_time_seconds[selected_environment] += dt
-            total_visible_env_time = sum(max(0.0, float(environment_time_seconds.get(k, 0.0))) for k in get_active_environment_keys())
-            if (not hidden_revealed) and total_visible_env_time >= get_hidden_unlock_threshold_seconds(hidden_cycle_index):
+            total_visible_env_time = sum(
+                max(0.0, float(environment_time_seconds.get(k, 0.0)))
+                for k in get_active_environment_keys()
+            )
+            if (
+                not hidden_revealed
+            ) and total_visible_env_time >= get_hidden_unlock_threshold_seconds(hidden_cycle_index):
                 hidden_revealed = True
                 generate_hidden_environment_from_progress()
                 awaiting_hidden_relock_choice = True
@@ -1101,10 +1180,8 @@ def main():
                 # explicit close should terminate app (and tray)
                 save_active_slot(force=True)
                 if tray_icon is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         tray_icon.stop()
-                    except Exception:
-                        pass
                 running = False
             elif event.type == pygame.WINDOWMINIMIZED:
                 # handle minimize event -> send to tray
@@ -1112,10 +1189,8 @@ def main():
                 # hide the native window so it is removed from the taskbar
                 hide_window()
                 # also iconify as a fallback
-                try:
+                with contextlib.suppress(Exception):
                     pygame.display.iconify()
-                except Exception:
-                    pass
             elif event.type in (pygame.WINDOWRESIZED, getattr(pygame, "WINDOWSIZECHANGED", -1)):
                 new_w = getattr(event, "x", None)
                 new_h = getattr(event, "y", None)
@@ -1136,7 +1211,10 @@ def main():
                     continue
 
                 if app_screen == "save_select":
-                    selected_slot = min(NUM_SAVE_SLOTS - 1, max(0, (mouse_pos[1] * NUM_SAVE_SLOTS) // max(1, canvas_h)))
+                    selected_slot = min(
+                        NUM_SAVE_SLOTS - 1,
+                        max(0, (mouse_pos[1] * NUM_SAVE_SLOTS) // max(1, canvas_h)),
+                    )
                     enter_slot(selected_slot, force_new=False)
                     continue
                 if app_screen == "extra_stats":
@@ -1153,10 +1231,8 @@ def main():
                             else:
                                 save_active_slot(force=True)
                                 if tray_icon is not None:
-                                    try:
+                                    with contextlib.suppress(Exception):
                                         tray_icon.stop()
-                                    except Exception:
-                                        pass
                                 running = False
                             continue
                         if no_rect.collidepoint(mouse_pos):
@@ -1227,7 +1303,9 @@ def main():
                             hidden_revealed = False
                             hidden_environment_name = None
                             selected_environment = None
-                            environment_time_seconds = {k: 0.0 for k in get_active_environment_keys()}
+                            environment_time_seconds = {
+                                k: 0.0 for k in get_active_environment_keys()
+                            }
                             hidden_cycle_index += 1
                             awaiting_hidden_relock_choice = False
                             mark_save_dirty()
@@ -1306,7 +1384,9 @@ def main():
                     # restore native window and bring to foreground
                     show_window()
                     try:
-                        screen = pygame.display.set_mode((window_size[0], window_size[1]), pygame.RESIZABLE)
+                        screen = pygame.display.set_mode(
+                            (window_size[0], window_size[1]), pygame.RESIZABLE
+                        )
                         update_viewport()
                     except Exception:
                         pass
@@ -1314,14 +1394,11 @@ def main():
                     # stop tray then quit
                     save_active_slot(force=True)
                     if tray_icon is not None:
-                        try:
+                        with contextlib.suppress(Exception):
                             tray_icon.stop()
-                        except Exception:
-                            pass
                     running = False
 
         if app_screen == "game":
-            prev_active = shake.active
             shake.update(dt)
             if status_flash_timer > 0.0:
                 status_flash_timer = max(0.0, status_flash_timer - dt)

@@ -34,7 +34,7 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
     if not os.path.exists(save_file_path):
         return default_slots
     try:
-        with open(save_file_path, "r", encoding="utf-8") as f:
+        with open(save_file_path, encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, list):
             return default_slots
@@ -56,10 +56,7 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
                 except Exception:
                     continue
             selected_raw = candidate.get("selected_environment", None)
-            if selected_raw is None:
-                selected_environment = None
-            else:
-                selected_environment = str(selected_raw).lower()
+            selected_environment = None if selected_raw is None else str(selected_raw).lower()
             saved_evolution_stage = str(candidate.get("evolution_stage", "")).lower()
             if saved_evolution_stage not in {"dormant", "cracked", "hatching", "petawaru"}:
                 # Backward compatibility for saves that used `monster_stage`.
@@ -73,22 +70,28 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
                 else:
                     saved_evolution_stage = "dormant"
 
-            merged.update({
-                "used": bool(candidate.get("used", False)),
-                "current_tab": "environment" if tab_value == "environment" else "stats",
-                "time_alive_seconds": float(candidate.get("time_alive_seconds", 0.0)),
-                "evolution_stage": saved_evolution_stage,
-                "evolution_click_progress": int(candidate.get("evolution_click_progress", 0)),
-                "selected_environment": selected_environment,
-                "environment_time_seconds": sanitized_env_times,
-                "hidden_revealed": bool(candidate.get("hidden_revealed", False)),
-                "hidden_environment_name": candidate.get("hidden_environment_name", None),
-                "hidden_cycle_index": int(candidate.get("hidden_cycle_index", 1)),
-                "hidden_slot_index": int(candidate.get("hidden_slot_index", 3)),
-                "environment_slot_keys": candidate.get("environment_slot_keys", DEFAULT_ENVIRONMENT_KEYS),
-                "awaiting_hidden_relock_choice": bool(candidate.get("awaiting_hidden_relock_choice", False)),
-                "known_environments": candidate.get("known_environments", {}),
-            })
+            merged.update(
+                {
+                    "used": bool(candidate.get("used", False)),
+                    "current_tab": "environment" if tab_value == "environment" else "stats",
+                    "time_alive_seconds": float(candidate.get("time_alive_seconds", 0.0)),
+                    "evolution_stage": saved_evolution_stage,
+                    "evolution_click_progress": int(candidate.get("evolution_click_progress", 0)),
+                    "selected_environment": selected_environment,
+                    "environment_time_seconds": sanitized_env_times,
+                    "hidden_revealed": bool(candidate.get("hidden_revealed", False)),
+                    "hidden_environment_name": candidate.get("hidden_environment_name", None),
+                    "hidden_cycle_index": int(candidate.get("hidden_cycle_index", 1)),
+                    "hidden_slot_index": int(candidate.get("hidden_slot_index", 3)),
+                    "environment_slot_keys": candidate.get(
+                        "environment_slot_keys", DEFAULT_ENVIRONMENT_KEYS
+                    ),
+                    "awaiting_hidden_relock_choice": bool(
+                        candidate.get("awaiting_hidden_relock_choice", False)
+                    ),
+                    "known_environments": candidate.get("known_environments", {}),
+                }
+            )
             if merged["hidden_cycle_index"] < 1:
                 merged["hidden_cycle_index"] = 1
             if merged["hidden_slot_index"] not in (0, 1, 2, 3):
@@ -99,8 +102,7 @@ def load_save_slots(num_slots, save_file_path=DEFAULT_SAVE_FILE_PATH):
             else:
                 norm_keys = [str(k).lower() for k in keys]
                 merged["environment_slot_keys"] = [
-                    "fire" if key == "hidden" else key
-                    for key in norm_keys
+                    "fire" if key == "hidden" else key for key in norm_keys
                 ]
             if len(set(merged["environment_slot_keys"])) != 4:
                 deduped_keys = []
