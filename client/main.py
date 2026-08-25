@@ -6,12 +6,27 @@ import sys
 import time
 from ctypes import wintypes
 
+import api_client
 import pygame
-
-from environment_generator_v4_full import Environment, World
-from prototypes_v4_fitted import PROTOTYPE_LIBRARY
-from save_system import load_save_slots, new_slot_state, write_save_slots
+from config import (
+    ASPECT_RATIO,
+    ASSETS_DIR,
+    AUTOSAVE_INTERVAL_SECONDS,
+    BACKEND_BASE_URL,
+    DEFAULT_ENVIRONMENT_KEYS,
+    FPS,
+    HIDDEN_UNLOCK_THRESHOLD_SECONDS_TEST,
+    NUM_SAVE_SLOTS,
+    PETAWARU_IMAGE_PATH,
+    RESOLUTION_SCALE,
+    START_MENU_BACKGROUND_PATH,
+    WINDOW_H,
+    WINDOW_W,
+)
+from platform_win32.tray_support import start_tray_icon
+from platform_win32.win32_types import MINMAXINFO, MONITORINFO, RECT
 from screens import (
+    draw_backend_error_screen,
     draw_extra_stats_page,
     draw_game_screen,
     draw_save_select,
@@ -21,28 +36,15 @@ from screens import (
     get_stats_row_rect_for_label,
     get_ui_layout,
 )
-from tray_support import start_tray_icon
 from ui_helpers import ShakeAnimation, format_time
-from win32_types import MINMAXINFO, MONITORINFO, RECT
-
-WINDOW_W, WINDOW_H = 300, 600
-RESOLUTION_SCALE = 4
-ASPECT_RATIO = WINDOW_W / WINDOW_H
-FPS = 240
-NUM_SAVE_SLOTS = 3
-AUTOSAVE_INTERVAL_SECONDS = 1.0
-START_MENU_BACKGROUND_PATH = os.path.join("assets", "icons", "background", "start_menu.png")
-PETAWARU_IMAGE_PATH = os.path.join("assets", "icons", "monster", "petawaru.png")
-HIDDEN_THRESHOLD_K = 0.0037
-HIDDEN_THRESHOLD_P = 0.85
-FIRST_CYCLE_THRESHOLD_SECONDS_TEST = 10.0
-DEFAULT_ENVIRONMENT_KEYS = ["water", "earth", "air", "fire"]
-GENERATOR_PARENT_ORDER = ["air", "earth", "fire", "water"]
-PROTOTYPES_BY_NAME = {p["name"]: p for p in PROTOTYPE_LIBRARY}
 
 
-# tray support is imported at runtime inside start_tray() to satisfy static analysis
-HAS_PYSTRAY = False
+def get_hidden_unlock_threshold_seconds(cycle_index):
+    # The server (backend/app/progression.py) is authoritative on whether
+    # this threshold has actually been crossed; this is only used to render
+    # the progress bar/label, so cycle_index isn't consulted (matches the
+    # backend's own stub for now).
+    return HIDDEN_UNLOCK_THRESHOLD_SECONDS_TEST
 
 
 def main():
@@ -50,7 +52,7 @@ def main():
     win_hook_refs = {}
     is_interactive_resizing = False
     live_redraw = None
-    image_not_found_path = os.path.join("assets", "icons", "misc", "image_not_found.webp")
+    image_not_found_path = os.path.join(ASSETS_DIR, "icons", "misc", "image_not_found.webp")
 
     def load_image_with_fallback(primary_path):
         for path in (primary_path, image_not_found_path):
@@ -124,9 +126,9 @@ def main():
             pass
 
     # Use egg sprite as the app icon for both title bar and tray.
-    egg_path = os.path.join("assets", "icons", "egg", "egg1.png")
+    egg_path = os.path.join(ASSETS_DIR, "icons", "egg", "egg1.png")
     icon_path = egg_path
-    lock_path = os.path.join("assets", "icons", "misc", "lock.webp")
+    lock_path = os.path.join(ASSETS_DIR, "icons", "misc", "lock.webp")
     lock_image: pygame.Surface | None = None
     try:
         icon_surf = load_image_with_fallback(icon_path)
@@ -418,7 +420,7 @@ def main():
     reset_confirm_open = False
     quit_confirm_open = False
     app_screen = "start_menu"
-    save_slots = load_save_slots(NUM_SAVE_SLOTS)
+    save_slots: list[dict] = []
     active_slot_index: int | None = None
     time_alive_seconds = 0.0
     save_dirty = False
@@ -446,120 +448,25 @@ def main():
         return surf
 
     fire_bg_image = load_image_with_fallback(
-        os.path.join("assets", "icons", "background", "fire.png")
+        os.path.join(ASSETS_DIR, "icons", "background", "fire.png")
     )
     if fire_bg_image is None or not os.path.exists(
-        os.path.join("assets", "icons", "background", "fire.png")
+        os.path.join(ASSETS_DIR, "icons", "background", "fire.png")
     ):
         fire_bg_image = create_fire_background()
     environment_backgrounds = {
         "water": load_image_with_fallback(
-            os.path.join("assets", "icons", "background", "water.png")
+            os.path.join(ASSETS_DIR, "icons", "background", "water.png")
         ),
         "earth": load_image_with_fallback(
-            os.path.join("assets", "icons", "background", "earth.png")
+            os.path.join(ASSETS_DIR, "icons", "background", "earth.png")
         ),
-        "air": load_image_with_fallback(os.path.join("assets", "icons", "background", "air.png")),
+        "air": load_image_with_fallback(os.path.join(ASSETS_DIR, "icons", "background", "air.png")),
         "fire": fire_bg_image,
     }
-    world = World()
-
-    def get_prototype_key(env_name):
-        env_key = str(env_name or "").lower()
-        if env_key in PROTOTYPES_BY_NAME:
-            return env_key
-        base_key, _, suffix = env_key.rpartition("_")
-        if suffix.isdigit() and base_key in PROTOTYPES_BY_NAME:
-            return base_key
-        return None
-
-    def ensure_environment_known(env_name):
-        env_name = str(env_name or "").lower()
-        if not env_name:
-            return False
-        if env_name in world.environments:
-            return True
-        prototype_key = get_prototype_key(env_name)
-        if prototype_key is None:
-            return False
-        prototype = PROTOTYPES_BY_NAME[prototype_key]
-        world.environments[env_name] = Environment(
-            name=env_name,
-            weights={prototype_key: 1.0},
-            traits=dict(prototype["traits"]),
-            generation=int(prototype["gen_affinity"]),
-            parents=[],
-        )
-        return env_name in world.environments
-
-    def serialize_world_environments():
-        known = {}
-        for env_name, env in world.environments.items():
-            env_key = str(env_name or "").lower()
-            if env_key in DEFAULT_ENVIRONMENT_KEYS:
-                continue
-            known[env_key] = {
-                "name": env_key,
-                "weights": {str(k).lower(): float(v) for k, v in env.weights.items()},
-                "traits": {str(k): float(v) for k, v in env.traits.items()},
-                "generation": int(env.generation),
-                "parents": [str(p).lower() for p in env.parents],
-            }
-        return known
-
-    def restore_known_environments(serialized_environments):
-        if not isinstance(serialized_environments, dict):
-            return
-        for env_name, payload in serialized_environments.items():
-            if not isinstance(payload, dict):
-                continue
-            name = str(payload.get("name", env_name) or "").lower()
-            if not name or name in DEFAULT_ENVIRONMENT_KEYS:
-                continue
-            weights = payload.get("weights", {})
-            traits = payload.get("traits", {})
-            parents = payload.get("parents", [])
-            if not isinstance(weights, dict) or not isinstance(traits, dict):
-                continue
-            if not isinstance(parents, list):
-                parents = []
-            try:
-                world.environments[name] = Environment(
-                    name=name,
-                    weights={str(k).lower(): float(v) for k, v in weights.items()},
-                    traits={str(k): float(v) for k, v in traits.items()},
-                    generation=int(payload.get("generation", 0)),
-                    parents=[str(p).lower() for p in parents],
-                )
-            except Exception:
-                continue
-
-    def mark_save_dirty():
-        nonlocal save_dirty
-        if active_slot_index is None:
-            return
-        save_dirty = True
 
     def get_active_environment_keys():
         return list(environment_slot_keys)
-
-    def get_generation_parent_keys():
-        active_keys = [
-            key for key in get_active_environment_keys() if ensure_environment_known(key)
-        ]
-        ordered = []
-        for key in GENERATOR_PARENT_ORDER:
-            if key in active_keys and key not in ordered:
-                ordered.append(key)
-        for key in active_keys:
-            if key not in ordered:
-                ordered.append(key)
-        for key in GENERATOR_PARENT_ORDER:
-            if len(ordered) >= 4:
-                break
-            if key not in ordered and ensure_environment_known(key):
-                ordered.append(key)
-        return ordered[:4]
 
     def normalize_environment_time_seconds():
         nonlocal environment_time_seconds
@@ -580,46 +487,18 @@ def main():
             return {k: even for k in active}
         return {k: max(0.0, float(environment_time_seconds.get(k, 0.0))) / total for k in active}
 
-    def get_hidden_unlock_threshold_seconds(cycle_index):
-        return FIRST_CYCLE_THRESHOLD_SECONDS_TEST
-
     def ensure_environment_background(env_name):
         nonlocal environment_backgrounds
         if not env_name or env_name in environment_backgrounds:
             return
-        candidate_path = os.path.join("assets", "icons", "background", f"{env_name}.png")
+        candidate_path = os.path.join(ASSETS_DIR, "icons", "background", f"{env_name}.png")
         generated_bg = load_image_with_fallback(candidate_path)
         if generated_bg is not None and os.path.exists(candidate_path):
             environment_backgrounds[env_name] = generated_bg
         else:
             environment_backgrounds[env_name] = load_image_with_fallback(
-                os.path.join("assets", "icons", "background", "hidden.png")
+                os.path.join(ASSETS_DIR, "icons", "background", "hidden.png")
             )
-
-    def activate_generated_environment_slot():
-        # Legacy save hook: generated environments are now applied only after
-        # the player chooses which visible environment to replace.
-        normalize_environment_time_seconds()
-
-    def generate_hidden_environment_from_progress():
-        nonlocal hidden_environment_name
-        normalize_environment_time_seconds()
-        parent_keys = get_generation_parent_keys()
-        if len(parent_keys) < 4:
-            hidden_environment_name = "fire"
-            ensure_environment_background(hidden_environment_name)
-            mark_save_dirty()
-            return
-        times = [max(0.0, float(environment_time_seconds.get(k, 0.0))) for k in parent_keys]
-        total = sum(times)
-        ratios = [0.25] * 4 if total <= 0.0 else [t / total for t in times]
-        try:
-            generated_env = world.generate(parent_keys, ratios)
-            hidden_environment_name = generated_env.name
-        except Exception:
-            hidden_environment_name = "fire"
-        ensure_environment_background(hidden_environment_name)
-        mark_save_dirty()
 
     def get_pause_menu_rect():
         menu_w = int(canvas_w * 0.68)
@@ -661,37 +540,11 @@ def main():
         )
         return confirm_rect, yes_rect, no_rect
 
-    def reset_current_progress():
-        nonlocal current_tab, time_alive_seconds, evolution_stage, evolution_click_progress
-        nonlocal status_flash_text, status_flash_timer
-        nonlocal hatching_animation_active, hatching_animation_timer, egg_image
-        nonlocal \
-            selected_environment, \
-            environment_time_seconds, \
-            hidden_revealed, \
-            hidden_environment_name
-        nonlocal environment_slot_keys
-        nonlocal hidden_cycle_index, hidden_slot_index, awaiting_hidden_relock_choice
-        current_tab = "stats"
-        time_alive_seconds = 0.0
-        evolution_stage = "dormant"
-        evolution_click_progress = 0
-        status_flash_text = ""
-        status_flash_timer = 0.0
-        hatching_animation_active = False
-        hatching_animation_timer = 0.0
-        selected_environment = None
-        environment_time_seconds = {k: 0.0 for k in DEFAULT_ENVIRONMENT_KEYS}
-        hidden_revealed = False
-        hidden_environment_name = None
-        hidden_cycle_index = 1
-        hidden_slot_index = 3
-        environment_slot_keys = list(DEFAULT_ENVIRONMENT_KEYS)
-        awaiting_hidden_relock_choice = False
-        environment_time_seconds = {k: 0.0 for k in DEFAULT_ENVIRONMENT_KEYS}
-        egg_image = base_egg_image
-        rebuild_egg_sprite()
-        mark_save_dirty()
+    def mark_save_dirty():
+        nonlocal save_dirty
+        if active_slot_index is None:
+            return
+        save_dirty = True
 
     def get_stage_label():
         if evolution_stage == "cracked":
@@ -708,140 +561,99 @@ def main():
         return get_stage_label()
 
     def save_active_slot(force=False):
-        nonlocal save_dirty
+        nonlocal save_dirty, hidden_revealed, hidden_environment_name
+        nonlocal awaiting_hidden_relock_choice, current_tab
         if active_slot_index is None:
             return
         if (not force) and (not save_dirty):
             return
-        slot = save_slots[active_slot_index]
-        slot["used"] = True
-        slot["current_tab"] = current_tab
-        slot["time_alive_seconds"] = max(0.0, float(time_alive_seconds))
-        slot["evolution_stage"] = evolution_stage
-        slot["evolution_click_progress"] = max(0, min(2, int(evolution_click_progress)))
-        slot["selected_environment"] = selected_environment
         normalize_environment_time_seconds()
-        slot["environment_time_seconds"] = {
-            k: max(0.0, float(v)) for k, v in environment_time_seconds.items()
-        }
-        slot["hidden_revealed"] = bool(hidden_revealed)
-        slot["hidden_environment_name"] = hidden_environment_name
-        slot["hidden_cycle_index"] = int(hidden_cycle_index)
-        slot["hidden_slot_index"] = int(hidden_slot_index)
-        slot["environment_slot_keys"] = list(environment_slot_keys)
-        slot["awaiting_hidden_relock_choice"] = bool(awaiting_hidden_relock_choice)
-        slot["known_environments"] = serialize_world_environments()
         try:
-            write_save_slots(save_slots)
-            save_dirty = False
-        except Exception:
-            pass
+            updated = api_client.patch_slot(
+                active_slot_index,
+                current_tab=current_tab,
+                time_alive_seconds=max(0.0, float(time_alive_seconds)),
+                evolution_stage=evolution_stage,
+                evolution_click_progress=max(0, min(2, int(evolution_click_progress))),
+                selected_environment=selected_environment,
+                environment_time_seconds={
+                    k: max(0.0, float(v)) for k, v in environment_time_seconds.items()
+                },
+            )
+        except api_client.BackendUnavailableError:
+            # Keep local state and retry on the next autosave tick.
+            return
+        hidden_revealed = updated["hidden_revealed"]
+        hidden_environment_name = updated["hidden_environment_name"]
+        awaiting_hidden_relock_choice = updated["awaiting_hidden_relock_choice"]
+        current_tab = updated["current_tab"]
+        if hidden_environment_name:
+            ensure_environment_background(hidden_environment_name)
+        save_dirty = False
 
-    def enter_slot(slot_index, force_new=False):
-        nonlocal \
-            active_slot_index, \
-            app_screen, \
-            current_tab, \
-            time_alive_seconds, \
-            save_dirty, \
-            autosave_timer
-        nonlocal evolution_stage, evolution_click_progress, status_flash_text, status_flash_timer
-        nonlocal hatching_animation_active, hatching_animation_timer, egg_image
+    def _apply_slot_detail(detail):
+        nonlocal current_tab, time_alive_seconds, evolution_stage, evolution_click_progress
         nonlocal selected_environment, environment_time_seconds, hidden_revealed
-        nonlocal \
-            hidden_environment_name, \
-            hidden_cycle_index, \
-            hidden_slot_index, \
-            environment_slot_keys
-        nonlocal awaiting_hidden_relock_choice
+        nonlocal hidden_environment_name, hidden_cycle_index, hidden_slot_index
+        nonlocal environment_slot_keys, awaiting_hidden_relock_choice
+        current_tab = detail["current_tab"]
+        time_alive_seconds = max(0.0, float(detail["time_alive_seconds"]))
+        evolution_stage = detail["evolution_stage"]
+        evolution_click_progress = max(0, min(2, int(detail["evolution_click_progress"])))
+        selected_environment = detail["selected_environment"]
+        environment_slot_keys = list(detail["environment_slot_keys"])
+        environment_time_seconds = dict(detail["environment_time_seconds"])
+        hidden_revealed = bool(detail["hidden_revealed"])
+        hidden_environment_name = detail["hidden_environment_name"]
+        hidden_cycle_index = max(1, int(detail["hidden_cycle_index"]))
+        hidden_slot_index = int(detail["hidden_slot_index"])
+        if hidden_slot_index not in (0, 1, 2, 3):
+            hidden_slot_index = 3
+        awaiting_hidden_relock_choice = bool(detail["awaiting_hidden_relock_choice"])
+        for env_key in environment_slot_keys:
+            ensure_environment_background(env_key)
+        if hidden_environment_name:
+            ensure_environment_background(hidden_environment_name)
+
+    def reset_current_progress():
+        nonlocal status_flash_text, status_flash_timer
+        nonlocal hatching_animation_active, hatching_animation_timer, egg_image
+        if active_slot_index is None:
+            return
+        try:
+            detail = api_client.reset_slot(active_slot_index)
+        except api_client.BackendUnavailableError:
+            return
+        _apply_slot_detail(detail)
+        status_flash_text = ""
+        status_flash_timer = 0.0
+        hatching_animation_active = False
+        hatching_animation_timer = 0.0
+        egg_image = base_egg_image
+        rebuild_egg_sprite()
+
+    def enter_slot(slot_index):
+        nonlocal active_slot_index, app_screen, save_dirty, autosave_timer
+        nonlocal status_flash_text, status_flash_timer
+        nonlocal hatching_animation_active, hatching_animation_timer, egg_image
         nonlocal pause_menu_open, reset_confirm_open, quit_confirm_open
-        nonlocal world
+        nonlocal evolution_stage, evolution_click_progress
+        summary = next((s for s in save_slots if s["id"] == slot_index), None)
+        already_used = bool(summary and summary.get("used"))
+        try:
+            detail = (
+                api_client.get_slot(slot_index) if already_used else api_client.new_slot(slot_index)
+            )
+        except api_client.BackendUnavailableError:
+            app_screen = "backend_error"
+            return
         active_slot_index = slot_index
-        slot = save_slots[slot_index]
-        world = World()
+        _apply_slot_detail(detail)
 
-        if force_new or (not slot.get("used", False)):
-            current_tab = "stats"
-            time_alive_seconds = 0.0
-            save_slots[slot_index] = new_slot_state()
-            save_slots[slot_index]["used"] = True
-            evolution_stage = "dormant"
-            evolution_click_progress = 0
-            selected_environment = None
-            environment_time_seconds = {k: 0.0 for k in DEFAULT_ENVIRONMENT_KEYS}
-            hidden_revealed = False
-            hidden_environment_name = None
-            hidden_cycle_index = 1
-            hidden_slot_index = 3
-            environment_slot_keys = list(DEFAULT_ENVIRONMENT_KEYS)
-            awaiting_hidden_relock_choice = False
-        else:
-            current_tab = "environment" if slot.get("current_tab") == "environment" else "stats"
-            time_alive_seconds = max(0.0, float(slot.get("time_alive_seconds", 0.0)))
-            evolution_stage = slot.get("evolution_stage", "dormant")
-            if evolution_stage not in {"dormant", "cracked", "hatching", "petawaru"}:
-                evolution_stage = "dormant"
-            evolution_click_progress = max(0, min(2, int(slot.get("evolution_click_progress", 0))))
-            selected_raw = slot.get("selected_environment", None)
-            selected_environment = None if selected_raw is None else str(selected_raw).lower()
-            loaded_times = slot.get("environment_time_seconds", {})
-            if not isinstance(loaded_times, dict):
-                loaded_times = {}
-            hidden_revealed = bool(slot.get("hidden_revealed", False))
-            hidden_environment_name = slot.get("hidden_environment_name", None)
-            hidden_cycle_index = max(1, int(slot.get("hidden_cycle_index", 1)))
-            hidden_slot_index = int(slot.get("hidden_slot_index", 3))
-            if hidden_slot_index not in (0, 1, 2, 3):
-                hidden_slot_index = 3
-            restore_known_environments(slot.get("known_environments", {}))
-            loaded_slot_keys = slot.get("environment_slot_keys", DEFAULT_ENVIRONMENT_KEYS)
-            if isinstance(loaded_slot_keys, list) and len(loaded_slot_keys) == 4:
-                environment_slot_keys = []
-                for key in [str(k).lower() for k in loaded_slot_keys]:
-                    if key == "hidden":
-                        key = "fire"
-                    environment_slot_keys.append(key)
-            else:
-                environment_slot_keys = list(DEFAULT_ENVIRONMENT_KEYS)
-            if not environment_slot_keys or any(not k for k in environment_slot_keys):
-                environment_slot_keys = list(DEFAULT_ENVIRONMENT_KEYS)
-            if len(set(environment_slot_keys)) != 4:
-                deduped_keys = []
-                for key in environment_slot_keys + DEFAULT_ENVIRONMENT_KEYS:
-                    if key and key not in deduped_keys:
-                        deduped_keys.append(key)
-                    if len(deduped_keys) == 4:
-                        break
-                environment_slot_keys = deduped_keys
-            for env_key in environment_slot_keys:
-                ensure_environment_known(env_key)
-            hidden_slot_index = 3
-            environment_time_seconds = {}
-            for k in get_active_environment_keys():
-                environment_time_seconds[k] = max(0.0, float(loaded_times.get(k, 0.0)))
-            awaiting_hidden_relock_choice = bool(slot.get("awaiting_hidden_relock_choice", False))
-
-            if sum(
-                max(0.0, float(environment_time_seconds.get(k, 0.0)))
-                for k in get_active_environment_keys()
-            ) >= get_hidden_unlock_threshold_seconds(hidden_cycle_index):
-                if not hidden_revealed:
-                    hidden_revealed = True
-                if not hidden_environment_name:
-                    generate_hidden_environment_from_progress()
-            if hidden_revealed:
-                awaiting_hidden_relock_choice = True
-            if selected_environment == "hidden":
-                selected_environment = None
-            if (
-                selected_environment is not None
-                and selected_environment not in environment_slot_keys
-            ):
-                selected_environment = None
-            if evolution_stage == "hatching":
-                # Resume from the pre-hatch state and require the final trigger again.
-                evolution_stage = "cracked"
-                evolution_click_progress = 1
+        if evolution_stage == "hatching":
+            # Resume from the pre-hatch state and require the final trigger again.
+            evolution_stage = "cracked"
+            evolution_click_progress = 1
 
         status_flash_text = ""
         status_flash_timer = 0.0
@@ -850,14 +662,11 @@ def main():
         pause_menu_open = False
         reset_confirm_open = False
         quit_confirm_open = False
-        if hidden_environment_name:
-            ensure_environment_background(hidden_environment_name)
         egg_image = petawaru_image if evolution_stage == "petawaru" else base_egg_image
         rebuild_egg_sprite()
         app_screen = "game"
-        save_dirty = True
+        save_dirty = False
         autosave_timer = 0.0
-        save_active_slot(force=True)
 
     # tray / visibility state
     window_visible = True
@@ -996,6 +805,9 @@ def main():
 
         if app_screen == "start_menu":
             draw_start_menu(canvas, canvas_w, canvas_h, font, start_bg_image)
+
+        elif app_screen == "backend_error":
+            draw_backend_error_screen(canvas, canvas_w, canvas_h, font, BACKEND_BASE_URL)
 
         elif app_screen == "save_select":
             draw_save_select(
@@ -1154,26 +966,21 @@ def main():
         ):
             time_alive_seconds += dt
             mark_save_dirty()
-            autosave_timer += dt
-            if autosave_timer >= AUTOSAVE_INTERVAL_SECONDS:
-                autosave_timer = 0.0
-                save_active_slot(force=False)
 
         if app_screen == "game" and not pause_menu_open and not awaiting_hidden_relock_choice:
             if selected_environment in get_active_environment_keys():
                 environment_time_seconds[selected_environment] += dt
-            total_visible_env_time = sum(
-                max(0.0, float(environment_time_seconds.get(k, 0.0)))
-                for k in get_active_environment_keys()
-            )
-            if (
-                not hidden_revealed
-            ) and total_visible_env_time >= get_hidden_unlock_threshold_seconds(hidden_cycle_index):
-                hidden_revealed = True
-                generate_hidden_environment_from_progress()
-                awaiting_hidden_relock_choice = True
-                current_tab = "environment"
             mark_save_dirty()
+
+        if save_dirty:
+            autosave_timer += dt
+            if autosave_timer >= AUTOSAVE_INTERVAL_SECONDS:
+                autosave_timer = 0.0
+                # The server decides here whether the unlock threshold was
+                # crossed (see save_active_slot); this batches that check to
+                # once per autosave tick instead of every frame, trading a
+                # sub-second delay for not hammering the backend at 240fps.
+                save_active_slot(force=False)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -1207,7 +1014,15 @@ def main():
 
                 if app_screen == "start_menu":
                     if get_start_button_rect(canvas_w, canvas_h).collidepoint(mouse_pos):
-                        app_screen = "save_select"
+                        try:
+                            save_slots = api_client.list_slots()
+                            app_screen = "save_select"
+                        except api_client.BackendUnavailableError:
+                            app_screen = "backend_error"
+                    continue
+
+                if app_screen == "backend_error":
+                    app_screen = "start_menu"
                     continue
 
                 if app_screen == "save_select":
@@ -1215,7 +1030,7 @@ def main():
                         NUM_SAVE_SLOTS - 1,
                         max(0, (mouse_pos[1] * NUM_SAVE_SLOTS) // max(1, canvas_h)),
                     )
-                    enter_slot(selected_slot, force_new=False)
+                    enter_slot(selected_slot)
                     continue
                 if app_screen == "extra_stats":
                     continue
@@ -1225,7 +1040,6 @@ def main():
                         if yes_rect.collidepoint(mouse_pos):
                             if reset_confirm_open:
                                 reset_current_progress()
-                                save_active_slot(force=True)
                                 pause_menu_open = False
                                 reset_confirm_open = False
                             else:
@@ -1299,16 +1113,31 @@ def main():
                         if awaiting_hidden_relock_choice and hidden_revealed:
                             if hidden_environment_name:
                                 ensure_environment_background(hidden_environment_name)
-                                environment_slot_keys[idx] = hidden_environment_name
-                            hidden_revealed = False
-                            hidden_environment_name = None
-                            selected_environment = None
-                            environment_time_seconds = {
-                                k: 0.0 for k in get_active_environment_keys()
-                            }
-                            hidden_cycle_index += 1
-                            awaiting_hidden_relock_choice = False
-                            mark_save_dirty()
+                                new_keys = list(environment_slot_keys)
+                                new_keys[idx] = hidden_environment_name
+                                try:
+                                    updated = api_client.patch_slot(
+                                        active_slot_index,
+                                        environment_slot_keys=new_keys,
+                                        hidden_revealed=False,
+                                        hidden_environment_name=None,
+                                        selected_environment=None,
+                                        environment_time_seconds={k: 0.0 for k in new_keys},
+                                        hidden_cycle_index=hidden_cycle_index + 1,
+                                        awaiting_hidden_relock_choice=False,
+                                    )
+                                except api_client.BackendUnavailableError:
+                                    break
+                                environment_slot_keys = list(updated["environment_slot_keys"])
+                                hidden_revealed = updated["hidden_revealed"]
+                                hidden_environment_name = updated["hidden_environment_name"]
+                                selected_environment = updated["selected_environment"]
+                                environment_time_seconds = dict(updated["environment_time_seconds"])
+                                hidden_cycle_index = updated["hidden_cycle_index"]
+                                awaiting_hidden_relock_choice = updated[
+                                    "awaiting_hidden_relock_choice"
+                                ]
+                                save_dirty = False
                             break
                         if selected_environment == env_key:
                             selected_environment = None
