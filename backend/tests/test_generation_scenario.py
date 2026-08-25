@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from app.game_engine.environment_generator import World
-from app.game_engine.naming import ELEMENT_WORDS
+from app.game_engine.naming import COSMIC_TEMPLATES, words_for_element
 
 BASE_KEYS = ["air", "earth", "water", "fire"]
 STEPS = 10
@@ -27,11 +27,14 @@ def _random_ratios(n=4):
     return [r / total for r in raw]
 
 
-def _name_reflects_composition(name: str, weights: dict[str, float]) -> bool:
-    full_weights = {el: weights.get(el, 0.0) for el in ELEMENT_WORDS}
+def _name_reflects_composition(name: str, weights: dict[str, float], tier: float) -> bool:
+    full_weights = {el: weights.get(el, 0.0) for el in ("fire", "water", "earth", "air")}
     ordered = sorted(full_weights.items(), key=lambda kv: kv[1], reverse=True)
-    dominant, second = ordered[0][0], ordered[1][0]
-    candidates = ELEMENT_WORDS[dominant] + ELEMENT_WORDS[second]
+    dominant = ordered[0][0]
+    if tier >= 11.0:
+        return any(phrase in name for phrase in COSMIC_TEMPLATES[dominant])
+    second = ordered[1][0]
+    candidates = words_for_element(dominant) | words_for_element(second)
     return any(word in name for word in candidates)
 
 
@@ -64,7 +67,7 @@ def test_ten_step_generation_chain_is_internally_consistent(seed):
         assert abs(sum(child.weights.values()) - 1.0) < 1e-6
         assert all(0.0 <= v <= 1.0 for v in child.weights.values())
         assert all(0.0 <= v <= 1.0 for v in child.traits.values())
-        assert _name_reflects_composition(child.name, child.weights), (
+        assert _name_reflects_composition(child.name, child.weights, child.tier), (
             f"{child.name!r} doesn't reflect its composition {child.weights}"
         )
 
