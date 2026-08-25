@@ -160,6 +160,25 @@ EMERGENT_QUALIFIERS = {
     "resonance": "Resonant",
 }
 
+NAME_COLLISION_RETRIES = 20
+
+_ROMAN_VALUES = [
+    (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+    (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+    (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+]  # fmt: skip
+
+
+def _to_roman(n: int) -> str:
+    if n > 3999:
+        return str(n)
+    parts = []
+    remaining = n
+    for value, symbol in _ROMAN_VALUES:
+        count, remaining = divmod(remaining, value)
+        parts.append(symbol * count)
+    return "".join(parts)
+
 
 def _band_for_tier(tier: float) -> str:
     step = math.floor(tier)
@@ -200,20 +219,43 @@ def _emergent_prefix(traits: dict[str, float]) -> str:
     return ""
 
 
-def compose_name(weights: dict[str, float], traits: dict[str, float], tier: float) -> str:
+def compose_name(
+    weights: dict[str, float],
+    traits: dict[str, float],
+    tier: float,
+    existing_names: set[str] | None = None,
+) -> str:
+    existing_names = existing_names or set()
     dominant, second, dominant_share, second_share = _dominant_and_second(weights)
     prefix = _emergent_prefix(traits)
     band = _band_for_tier(tier)
+    is_hybrid = dominant_share - second_share < HYBRID_THRESHOLD
 
-    if band == "cosmic":
-        return f"{prefix}{random.choice(COSMIC_TEMPLATES[dominant])}"
+    def _candidate() -> str:
+        if band == "cosmic":
+            return f"{prefix}{random.choice(COSMIC_TEMPLATES[dominant])}"
+        vocab = VOCAB[band]
+        if is_hybrid:
+            adjective = random.choice(vocab[second]["adj"])
+            noun = random.choice(vocab[dominant]["noun"])
+            base = f"{adjective} {noun}"
+        else:
+            base = random.choice(vocab[dominant]["noun"])
+        return f"{prefix}{base}"
 
-    vocab = VOCAB[band]
-    if dominant_share - second_share >= HYBRID_THRESHOLD:
-        base = random.choice(vocab[dominant]["noun"])
-    else:
-        adjective = random.choice(vocab[second]["adj"])
-        noun = random.choice(vocab[dominant]["noun"])
-        base = f"{adjective} {noun}"
+    for _ in range(NAME_COLLISION_RETRIES):
+        candidate = _candidate()
+        if candidate not in existing_names:
+            return candidate
 
-    return f"{prefix}{base}"
+    # The word bank is exhausted against this world's history (a long-lived
+    # save that's revisited the same band/element combo many times) -
+    # guarantee uniqueness with an escalating numeral instead of colliding
+    # or looping forever.
+    base_name = _candidate()
+    suffix = 2
+    candidate = f"{base_name} {_to_roman(suffix)}"
+    while candidate in existing_names:
+        suffix += 1
+        candidate = f"{base_name} {_to_roman(suffix)}"
+    return candidate

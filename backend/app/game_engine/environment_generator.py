@@ -193,7 +193,7 @@ def _blend_weights(parent_weights, ratios, dominance, tier):
     return _normalize(noisy)
 
 
-def generate_next_environment(parents, time_ratios=None):
+def generate_next_environment(parents, time_ratios=None, existing_names=None):
     if len(parents) != 4:
         raise ValueError("Exactly 4 parents required.")
     if time_ratios is None:
@@ -213,7 +213,7 @@ def generate_next_environment(parents, time_ratios=None):
 
     final_weights = _blend_weights([p.weights for p in parents], ratios, dominance, child_tier)
     final_traits = _blend_traits([p.traits for p in parents], ratios, child_tier)
-    chosen_name = naming.compose_name(final_weights, final_traits, child_tier)
+    chosen_name = naming.compose_name(final_weights, final_traits, child_tier, existing_names)
 
     return Environment(
         name=chosen_name,
@@ -240,7 +240,9 @@ class World:
 
     def generate(self, parent_names, time_ratios=None):
         parents = [self.get(n) for n in parent_names]
-        child = generate_next_environment(parents, time_ratios)
+        child = generate_next_environment(
+            parents, time_ratios, existing_names=set(self.environments)
+        )
         return self.add(child)
 
 

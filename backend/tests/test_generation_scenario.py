@@ -50,12 +50,13 @@ def _reset_output_file():
     )
 
 
-@pytest.mark.parametrize("seed", range(5))
+@pytest.mark.parametrize("seed", range(5, 10))
 def test_ten_step_generation_chain_is_internally_consistent(seed):
     random.seed(seed)
     world = World()
     active = list(BASE_KEYS)
     rows = []
+    generated_names = []
     last_tier = 0.0
 
     for step in range(1, STEPS + 1):
@@ -63,6 +64,11 @@ def test_ten_step_generation_chain_is_internally_consistent(seed):
         child = world.generate(active, ratios)
 
         assert child.name
+        assert child.name not in generated_names, (
+            f"step {step}: {child.name!r} collides with an earlier generation in this run "
+            f"{generated_names}"
+        )
+        generated_names.append(child.name)
         assert child.tier >= 1.0 - 1e-9
         assert abs(sum(child.weights.values()) - 1.0) < 1e-6
         assert all(0.0 <= v <= 1.0 for v in child.weights.values())

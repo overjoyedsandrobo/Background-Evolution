@@ -102,3 +102,29 @@ def test_words_for_element_covers_every_band():
     for band in VOCAB.values():
         assert set(band["fire"]["noun"]) <= fire_words
         assert set(band["fire"]["adj"]) <= fire_words
+
+
+def test_compose_name_avoids_collisions_with_existing_names():
+    random.seed(0)
+    weights = {"fire": 0.9, "water": 0.03, "earth": 0.04, "air": 0.03}
+    existing = set(VOCAB["grounded"]["fire"]["noun"])  # exhaust the whole bank
+    for _ in range(10):
+        name = compose_name(weights, _traits(), tier=1.0, existing_names=existing)
+        assert name not in existing
+
+
+def test_compose_name_falls_back_to_numeral_suffix_when_bank_is_exhausted():
+    random.seed(0)
+    weights = {"fire": 0.9, "water": 0.03, "earth": 0.04, "air": 0.03}
+    all_nouns = VOCAB["grounded"]["fire"]["noun"]
+    existing = set(all_nouns)  # every pure-mode name this combo could produce
+    name = compose_name(weights, _traits(), tier=1.0, existing_names=existing)
+    assert name not in existing
+    assert any(name == f"{noun} II" for noun in all_nouns)
+
+
+def test_compose_name_with_no_existing_names_behaves_as_before():
+    random.seed(0)
+    weights = {"fire": 0.9, "water": 0.03, "earth": 0.04, "air": 0.03}
+    name = compose_name(weights, _traits(), tier=1.0)
+    assert name in VOCAB["grounded"]["fire"]["noun"]
