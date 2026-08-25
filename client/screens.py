@@ -108,6 +108,20 @@ def draw_start_menu(canvas, canvas_w, canvas_h, font, start_bg_image):
     canvas.blit(start_txt, start_txt.get_rect(center=start_btn.center))
 
 
+def draw_backend_error_screen(canvas, canvas_w, canvas_h, font, backend_base_url):
+    canvas.fill((28, 20, 20))
+    title_size = max(font.get_height() + 6, int(canvas_h * 0.045))
+    title_font = pygame.font.SysFont(None, title_size)
+    title_surf = title_font.render("Can't reach game server", True, (240, 220, 220))
+    canvas.blit(title_surf, title_surf.get_rect(center=(canvas_w // 2, int(canvas_h * 0.36))))
+
+    detail_surf = font.render(f"Expected it at {backend_base_url}", True, (215, 195, 195))
+    canvas.blit(detail_surf, detail_surf.get_rect(center=(canvas_w // 2, int(canvas_h * 0.44))))
+
+    retry_surf = font.render("Click anywhere to retry", True, (200, 205, 215))
+    canvas.blit(retry_surf, retry_surf.get_rect(center=(canvas_w // 2, int(canvas_h * 0.52))))
+
+
 def draw_save_select(
     canvas, canvas_w, canvas_h, font, save_slots, num_save_slots, canvas_scale, format_time
 ):

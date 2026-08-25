@@ -4,7 +4,7 @@ Environment Generator v4 — 4-Base System (Runtime)
 Complete runtime with 75 environments (15 per tier × 5 tiers).
 
 Usage:
-    from environment_generator_v4_full import World
+    from app.game_engine.environment_generator import World
 
     world = World()
     # Generate from 4 parents (can use same parent multiple times)
@@ -16,7 +16,7 @@ import math
 import random
 from dataclasses import dataclass
 
-from prototypes_v4_fitted import ALL_TRAITS, PROTO_GENS, PROTO_VECS, PROTOTYPE_LIBRARY
+from app.game_engine.prototypes import ALL_TRAITS, PROTO_GENS, PROTO_VECS, PROTOTYPE_LIBRARY
 
 # Constants
 N_TRAITS = len(ALL_TRAITS)
